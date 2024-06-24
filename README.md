@@ -7,8 +7,6 @@
 - `tests` - tests for the contracts.
 - `scripts` - scripts used by the project, mainly the deployment scripts.
 
-For generating ZK circuit and verifier contract, check: https://docs.ton.org/develop/dapps/tutorials/simple-zk-on-ton
-
 ## How to use
 
 ### Build

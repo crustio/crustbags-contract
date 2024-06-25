@@ -1,0 +1,5 @@
+const int one_ton = 1000000000; ;;10^9
+const int min_storage_fee = one_ton / 100; ;; 0.01 TON minimal storage fee
+const int default_storage_period = 60 * 60 * 24 * 180; ;; 180 days
+
+const op::increase = "op::increase"c; ;; create an opcode from string using the "c" prefix, this results in 0x7e8764ef opcode in this case

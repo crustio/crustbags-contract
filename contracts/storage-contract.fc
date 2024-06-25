@@ -1,0 +1,33 @@
+#include "imports/stdlib.fc";
+#include "constants.fc";
+
+{-
+    storage#_
+        torrent_hash:uint256 client:MsgAddress
+        total_storage_fee:Coins remaining_storage_fee:Coins
+        file_merkle_hash:uint256 file_size_in_bytes:uint64
+        storage_effective_time:uint32 storage_expire_time:uint32 = Storage;
+-}
+
+_ get_storage_contract_data() method_id {
+    var ds = get_data().begin_parse();
+
+    var (
+        torrent_hash, client,
+        total_storage_fee, remaining_storage_fee,
+        file_merkle_hash, file_size_in_bytes,
+        storage_effective_time, storage_expire_time
+    ) = (
+        ds~load_uint(256), ds~load_msg_addr(),
+        ds~load_coins(), ds~load_coins(),
+        ds~load_uint(256), ds~load_uint(64),
+        ds~load_uint(32), ds~load_uint(32)
+    );
+
+    return (
+        torrent_hash, client,
+        total_storage_fee, remaining_storage_fee,
+        file_merkle_hash, file_size_in_bytes,
+        storage_effective_time, storage_expire_time
+    );
+}

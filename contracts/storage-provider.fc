@@ -1,0 +1,30 @@
+#include "imports/stdlib.fc";
+#include "constants.fc";
+
+{-
+    storage#_
+        torrent_hash:uint256 client:MsgAddress provider:MsgAddress
+        file_merkle_hash:uint256 file_size_in_bytes:uint64
+        next_proof_byte:uint64 last_proof_time:uint32 = Storage;
+-}
+
+_ get_storage_provider_data() method_id {
+    var ds = get_data().begin_parse();
+
+    var (
+        torrent_hash, client, provider
+        file_merkle_hash, file_size_in_bytes,
+        next_proof_byte, last_proof_time
+    ) = (
+        ds.load_uint(256), ds.load_msg_addr(), ds.load_msg_addr(),
+        ds.load_uint(256), ds.load_uint(64),
+        ds.load_uint(64), ds.load_uint(32)
+    );
+
+    return (
+        torrent_hash, client, provider,
+        file_merkle_hash, file_size_in_bytes,
+        next_proof_byte, last_proof_time
+    );
+}
+

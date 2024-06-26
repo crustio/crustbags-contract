@@ -16,12 +16,12 @@ slice calculate_storage_contract_address(cell state_init) inline {
 
 cell build_storage_contract_stateinit(
     cell storage_contract_code,
-    int torrent_hash, slice client, int total_storage_fee,
+    int torrent_hash, slice owner_address, int total_storage_fee,
     int file_merkle_hash, int file_size_in_bytes
 ) {
     cell data = begin_cell()
             .store_uint(torrent_hash, 256)
-            .store_slice(client)
+            .store_slice(owner_address)
             .store_coins(total_storage_fee)
             .store_coins(total_storage_fee) ;; remaining_storage_fee = total_storage_fee
             .store_uint(file_merkle_hash, 256)

@@ -1,0 +1,42 @@
+int workchain() asm "0 PUSHINT";
+
+() force_chain(slice addr) impure {
+    (int wc, _) = parse_std_addr(addr);
+    throw_unless(333, wc == workchain());
+}
+
+slice calculate_storage_contract_address(cell state_init) inline {
+    return begin_cell()
+              .store_uint(4, 3)
+              .store_int(workchain(), 8)
+              .store_uint(cell_hash(state_init), 256)
+              .end_cell()
+              .begin_parse();
+}
+
+cell build_storage_contract_stateinit(
+    cell storage_contract_code,
+    int torrent_hash, slice client, int total_storage_fee,
+    int file_merkle_hash, int file_size_in_bytes
+) {
+    cell data = begin_cell()
+            .store_uint(torrent_hash, 256)
+            .store_slice(client)
+            .store_coins(total_storage_fee)
+            .store_coins(total_storage_fee) ;; remaining_storage_fee = total_storage_fee
+            .store_uint(file_merkle_hash, 256)
+            .store_uint(file_size_in_bytes, 64)
+            .store_uint(0, 32)  ;; storage_effective_time = 0
+            .store_uint(0, 32)  ;; storage_expire_time = 0
+            .end_cell();
+
+    cell state_init = begin_cell()
+            .store_uint(0, 2)
+            .store_maybe_ref(storage_contract_code)
+            .store_maybe_ref(data)
+            .store_uint(0, 1)
+            .end_cell();
+
+    return state_init;
+}
+

@@ -1,33 +1,154 @@
 #include "imports/stdlib.fc";
 #include "constants.fc";
 
+;; cell storage_provider_contract_code() asm """ "storage-provider-contract-code.boc" file>B B>boc PUSHREF """;
+;; the same constant but more "compiler" friendly
+cell storage_provider_contract_code() asm "";
+
 {-
     storage#_
-        torrent_hash:uint256 owner_address:MsgAddress
-        total_storage_fee:Coins remaining_storage_fee:Coins
+        torrent_hash:uint256 owner_address:MsgAddress storage_providers^Cell
+        total_storage_fee:Coins current_balance:Coins
         file_merkle_hash:uint256 file_size_in_bytes:uint64
         storage_effective_time:uint32 storage_expire_time:uint32 = Storage;
 -}
 
-_ get_storage_contract_data() method_id {
+_ load_data() inline {
     var ds = get_data().begin_parse();
 
     var (
-        torrent_hash, owner_address,
-        total_storage_fee, remaining_storage_fee,
-        file_merkle_hash, file_size_in_bytes,
-        storage_effective_time, storage_expire_time
+        torrent_hash, owner_address, storage_providers, total_storage_fee, current_balance,
+        file_merkle_hash, file_size_in_bytes, storage_effective_time, storage_expire_time
     ) = (
-        ds~load_uint(256), ds~load_msg_addr(),
-        ds~load_coins(), ds~load_coins(),
-        ds~load_uint(256), ds~load_uint(64),
-        ds~load_uint(32), ds~load_uint(32)
+        ds~load_uint(256), ds~load_msg_addr(), ds~load_ref(), ds~load_coins(), ds~load_coins(),
+        ds~load_uint(256), ds~load_uint(64), ds~load_uint(32), ds~load_uint(32)
     );
 
     return (
-        torrent_hash, owner_address,
-        total_storage_fee, remaining_storage_fee,
-        file_merkle_hash, file_size_in_bytes,
-        storage_effective_time, storage_expire_time
+        torrent_hash, owner_address, storage_providers, total_storage_fee, current_balance,
+        file_merkle_hash, file_size_in_bytes, storage_effective_time, storage_expire_time
     );
+}
+
+() add_to_balance(int amount) impure inline_ref {
+    var ds = get_data().begin_parse();
+    var (
+        torrent_hash, owner_address, storage_providers, total_storage_fee, current_balance, residue
+    ) = (
+        ds~load_uint(256), ds~load_msg_addr(), ds~load_ref(), ds~load_coins(), ds~load_coins(), ds
+    );
+    current_balance += amount;
+    set_data(
+        begin_cell()
+            .store_uint(torrent_hash, 256)
+            .store_msg_addr(owner_address)
+            .store_ref(storage_providers)
+            .store_coins(total_storage_fee)
+            .store_coins(current_balance)
+            .store_slice(residue)
+            .end_cell()
+    );
+}
+
+cell load_storage_providers_dict() inline {
+    var ds = get_data().begin_parse();
+    var (
+        torrent_hash, owner_address, storage_providers, residue
+    ) = (
+        ds~load_uint(256), ds~load_msg_addr(), ds~load_ref(), ds
+    );
+
+    cell storage_providers_dict = new_dict();
+    if (~ slice_empty?(storage_providers)) {
+        storage_providers_dict = storage_providers~load_dict();
+    }
+    return storage_providers_dict;
+}
+
+() save_storage_providers_dict(cell storage_providers_dict) impure inline {
+    var ds = get_data().begin_parse();
+    var (
+        torrent_hash, owner_address, storage_providers, residue
+    ) = (
+        ds~load_uint(256), ds~load_msg_addr(), ds~load_ref(), ds
+    );
+    set_data(
+        begin_cell()
+          .store_uint(torrent_hash, 256)
+          .store_msg_addr(owner_address)
+          .store_dict(storage_providers_dict)
+          .store_slice(residue)
+          .end_cell()
+    );
+}
+
+() deploy_storage_provider_contract(
+    slice provider_address
+) impure {
+    cell storage_providers_dict = load_storage_providers_dict();
+    var (_, success?) = storage_providers_dict.dict_get?(256, provider_address);
+    if (success?) {
+        throw(error::storage_provider_already_registered);
+    }
+
+    var (
+        torrent_hash, owner_address, storage_providers, total_storage_fee, current_balance,
+        file_merkle_hash, file_size_in_bytes, storage_effective_time, storage_expire_time
+    ) = load_data();
+
+    cell state_init = build_storage_provider_contract_stateinit(
+        storage_provider_contract_code(), my_address(),
+        torrent_hash, owner_address, provider_address,
+        file_merkle_hash, file_size_in_bytes, 0, 0
+    );
+    slice storage_provider_contract_address = calculate_storage_provider_contract_address(state_init);
+
+    storage_providers_dict.dict_set(256, provider_address, storage_provider_contract_address);
+    save_storage_providers_dict(storage_providers_dict);
+
+    cell msg = begin_cell()
+          .store_uint(0x18, 6)
+          .store_slice(storage_provider_contract_address)
+          .store_coins(0)
+          .store_uint(4 + 2, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
+          .store_ref(state_init)
+          .store_uint(op::deploy_storage_provider_contract, 32)
+          .store_uint(query_id, 64)
+          .end_cell();
+    send_raw_message(msg, 64);
+}
+
+() recv_internal(int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    slice cs = in_msg_full.begin_parse();
+    int flags = cs~load_uint(4);
+
+    if (flags & 1) { ;; ignore all bounced messages
+        return ();
+    }
+    slice sender_address = cs~load_msg_addr();
+
+    if (in_msg_body.slice_empty?()) {
+        return add_to_balance(msg_value);
+    }
+    int op = in_msg_body~load_uint(32);
+    if (op == 0) {
+        return add_to_balance(msg_value);
+    }
+
+    int query_id = in_msg_body~load_uint(64);
+
+    if (op == op::accept_storage_contract) {
+        deploy_storage_provider_contract(sender_address);
+        return ();
+    }
+
+}
+
+slice get_storage_provider_contract_address(slice provider_address) method_id {
+    cell storage_providers_dict = load_storage_providers_dict();
+    var (storage_provider_contract_address, success?) = storage_providers_dict.dict_get?(256, provider_address);
+    if (success?) {
+        return storage_provider_contract_address;
+    }
+    return ();
 }

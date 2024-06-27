@@ -122,3 +122,11 @@ cell storage_contract_code() asm "";
     throw(0xffff);
 }
 
+slice get_storage_contract_address(slice torrent_hash) method_id {
+    cell bags_dict = load_bags_dict();
+    var (storage_contract_address, success?) = bags_dict.dict_get?(256, torrent_hash);
+    if (success?) {
+        return storage_contract_address;
+    }
+    return ();
+}

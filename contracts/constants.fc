@@ -13,6 +13,8 @@ const op::accept_storage_contract = "op::accept_storage_contract"c;
 const op::deploy_storage_provider_contract = "op::deploy_storage_provider_contract"c;
 const op::proof_storage = "op::proof_storage"c;
 
+const error::unknown_op = 0xffff;
+const error::wrong_workchain = 333;
 const error::unauthorized = 401;
 const error::not_enough_money = 1001;
 const error::duplicated_torrent_hash = 1002;

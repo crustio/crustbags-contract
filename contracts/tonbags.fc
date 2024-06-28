@@ -1,68 +1,66 @@
-#include "constants.fc";
 #include "imports/stdlib.fc";
+#include "constants.fc";
+#include "messages.fc";
+#include "params.fc";
+#include "utils.fc";
 
 {-
     storage#_
-        admin_address:MsgAddress bags:^Cell
+        admin_address:MsgAddress bags:^Cell storage_contract_code:^Cell = Storage;
 -}
-(slice, cell, cell, cell) load_data() inline {
+(slice, cell, cell) load_data() inline {
     slice ds = get_data().begin_parse();
     return (
         ds~load_msg_addr(),
+        ds~load_dict(),
         ds~load_ref()
     );
 }
 
-() save_data(slice admin_address, cell bags) impure inline {
+() save_data(slice admin_address, cell bags, cell storage_contract_code) impure inline {
     set_data(
         begin_cell()
             .store_slice(admin_address)
-            .store_ref(bags)
+            .store_dict(bags)
+            .store_ref(storage_contract_code)
             .end_cell()
     );
 }
 
 cell load_bags_dict() inline {
-    (slice admin_address, cell bags) = load_data();
-    cell bags_dict = new_dict();
-    if (~ slice_empty?(bags)) {
-        bags_dict = bags~load_dict();
-    }
-    return bags_dict;
+    (slice admin_address, cell bags, cell storage_contract_code) = load_data();
+    return bags;
 }
 
 () save_bags_dict(cell bags_dict) impure inline {
-    (slice admin_address, cell bags) = load_data();
+    (slice admin_address, cell bags, cell storage_contract_code) = load_data();
     set_data(
         begin_cell()
             .store_slice(admin_address)
             .store_dict(bags_dict)
+            .store_ref(storage_contract_code)
             .end_cell()
     );
 }
 
-;; cell storage_contract_code() asm """ "storage-contract-code.boc" file>B B>boc PUSHREF """;
-;; the same constant but more "compiler" friendly
-cell storage_contract_code() asm "";
-
 () deploy_storage_contract(
-    slice owner_address, int query_id,
+    cell storage_contract_code, slice owner_address, int query_id,
     int file_size, int merkle_hash, int torrent_hash, int total_storage_fee
 ) impure {
     throw_unless(error::file_too_small, file_size >= minimal_file_size);
     throw_unless(error::file_too_big, file_size <= maximal_file_size);
 
     cell state_init = build_storage_contract_stateinit(
-        storage_contract_code(), torrent_hash, owner_address, total_storage_fee, merkle_hash, file_size
+        storage_contract_code, torrent_hash, owner_address, total_storage_fee, merkle_hash, file_size
     );
     slice storage_contract_address = calculate_storage_contract_address(state_init);
 
     cell bags_dict = load_bags_dict();
-    var (_, success?) = bags_dict.dict_get?(256, torrent_hash);
+    var (_, success?) = bags_dict.udict_get?(256, torrent_hash);
     if (success?) {
         throw(error::duplicated_torrent_hash);
     }
-    bags_dict.dict_set(256, torrent_hash, storage_contract_address);
+    bags_dict.udict_set(256, torrent_hash, storage_contract_address);
     save_bags_dict(bags_dict);
 
     cell msg = begin_cell()
@@ -91,12 +89,12 @@ cell storage_contract_code() asm "";
   
     int op = in_msg_body~load_uint(32);
     int query_id = in_msg_body~load_uint(64);
+    (slice admin_address, cell bags, cell storage_contract_code) = load_data();
 
     if (op == op::update_admin) {
-        (slice admin_address, cell bags) = load_data();
         throw_unless(73, equal_slices(sender_address, admin_address));
         slice new_admin_address = in_msg_body~load_msg_addr();
-        save_data(new_admin_address, bags);
+        save_data(new_admin_address, bags, storage_contract_code);
         return ();
     }
     if (op == op::deploy_storage_contract) {
@@ -113,7 +111,7 @@ cell storage_contract_code() asm "";
         int file_size = info_cs~load_uint(64);
         int merkle_hash = in_msg_body~load_uint(256);
 
-        deploy_storage_contract(sender_address, query_id, file_size, merkle_hash, torrent_hash, msg_value);
+        deploy_storage_contract(storage_contract_code, sender_address, query_id, file_size, merkle_hash, torrent_hash, msg_value);
 
         return ();
     }
@@ -122,11 +120,11 @@ cell storage_contract_code() asm "";
     throw(0xffff);
 }
 
-slice get_storage_contract_address(slice torrent_hash) method_id {
+slice get_storage_contract_address(int torrent_hash) method_id {
     cell bags_dict = load_bags_dict();
-    var (storage_contract_address, success?) = bags_dict.dict_get?(256, torrent_hash);
+    var (storage_contract_address, success?) = bags_dict.udict_get?(256, torrent_hash);
     if (success?) {
         return storage_contract_address;
     }
-    return ();
+    return "";
 }

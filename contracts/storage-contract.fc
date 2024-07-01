@@ -1,84 +1,198 @@
 #include "imports/stdlib.fc";
 #include "constants.fc";
-
-;; cell storage_provider_contract_code() asm """ "storage-provider-contract-code.boc" file>B B>boc PUSHREF """;
-;; the same constant but more "compiler" friendly
-cell storage_provider_contract_code() asm "";
+#include "messages.fc";
 
 {-
     storage#_
-        torrent_hash:uint256 owner_address:MsgAddress storage_providers^Cell
-        total_storage_fee:Coins current_balance:Coins
-        file_merkle_hash:uint256 file_size_in_bytes:uint64
-        storage_effective_time:uint32 storage_expire_time:uint32 = Storage;
+        bag_info:^Cell
+        storage_fee_params:^Cell storage_provider_contracts^Cell
+        storage_provider_last_proof_times^Cell,
+        storage_provider_fees^Cell, storage_provider_fees_paid^Cell,
+        storage_provider_contract_code:^Cell = Storage;
 -}
-
-_ load_data() inline {
+(cell, cell, cell, cell, cell, cell, cell) load_data() inline {
     var ds = get_data().begin_parse();
 
     var (
-        torrent_hash, owner_address, storage_providers, total_storage_fee, current_balance,
-        file_merkle_hash, file_size_in_bytes, storage_effective_time, storage_expire_time
+        bag_info, storage_fee_params, storage_provider_contracts, storage_provider_contract_code,
+        storage_provider_last_proof_times, storage_provider_fees, storage_provider_fees_paid
     ) = (
-        ds~load_uint(256), ds~load_msg_addr(), ds~load_ref(), ds~load_coins(), ds~load_coins(),
-        ds~load_uint(256), ds~load_uint(64), ds~load_uint(32), ds~load_uint(32)
+        ds.load_ref(), ds.load_ref(), ds.load_ref(), ds.load_ref(), ds.load_ref(), ds.load_ref(), ds.load_ref()
     );
-
     return (
-        torrent_hash, owner_address, storage_providers, total_storage_fee, current_balance,
-        file_merkle_hash, file_size_in_bytes, storage_effective_time, storage_expire_time
+        bag_info, storage_fee_params, storage_provider_contracts, storage_provider_contract_code, storage_provider_last_proof_times, storage_provider_fees, storage_provider_fees_paid
     );
 }
 
-() add_to_balance(int amount) impure inline_ref {
+(int, slice, int, int) load_bag_info() inline {
+    var ds = get_data().begin_parse().load_ref();
+    var (
+        torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes
+    ) = (
+        ds~load_uint(256), ds~load_msg_addr(), ds~load_uint(256), ds~load_uint(64)
+    );
+    return (torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes);
+}
+
+(int, int, int, int, int, int, int, int) load_storage_fee_params() inline {
+    var ds = get_data().begin_parse().skip_ref().load_ref();
+    var (
+        total_storage_fee, residual_storage_fee, effective_storage_provider_count, storage_fee_rate,
+        storage_effective_time, storage_expire_time,
+        last_update_time, storage_fee_per_provider_stored
+    ) = (
+        ds~load_coins(), ds~load_coins(), ds~load_uint(32), ds~load_coins(), ds~load_uint(32), ds~load_uint(32), ds~load_uint(32), ds~load_coins()
+    );
+    return (
+        total_storage_fee, residual_storage_fee, effective_storage_provider_count, storage_fee_rate,
+        storage_effective_time, storage_expire_time,
+        last_update_time, storage_fee_per_provider_stored
+    );
+}
+
+cell save_storage_fee_params(
+    int total_storage_fee, int residual_storage_fee, int effective_storage_provider_count, int storage_fee_rate,
+    int storage_effective_time, int storage_expire_time,
+    int last_update_time, int storage_fee_per_provider_stored
+) impure inline {
     var ds = get_data().begin_parse();
     var (
-        torrent_hash, owner_address, storage_providers, total_storage_fee, current_balance, residue
+        bag_info, _, residue
     ) = (
-        ds~load_uint(256), ds~load_msg_addr(), ds~load_ref(), ds~load_coins(), ds~load_coins(), ds
+        ds.load_ref(), ds.load_ref(), ds
     );
-    current_balance += amount;
+    var storage_fee_params = begin_cell()
+        .store_coins(total_storage_fee)
+        .store_coins(residual_storage_fee)
+        .store_uint(effective_storage_provider_count, 32)
+        .store_coins(storage_fee_rate)
+        .store_uint(storage_effective_time, 32)
+        .store_uint(storage_expire_time, 32)
+        .store_uint(last_update_time, 32)
+        .store_coins(storage_fee_per_provider_stored)
+        .end_cell();
     set_data(
         begin_cell()
-            .store_uint(torrent_hash, 256)
-            .store_msg_addr(owner_address)
-            .store_ref(storage_providers)
-            .store_coins(total_storage_fee)
-            .store_coins(current_balance)
+            .store_ref(bag_info)
+            .store_ref(storage_fee_params)
             .store_slice(residue)
             .end_cell()
     );
 }
 
-cell load_storage_providers_dict() inline {
+cell load_storage_provider_contracts() inline {
     var ds = get_data().begin_parse();
     var (
-        torrent_hash, owner_address, storage_providers, residue
+        _, _, storage_provider_contracts, _
     ) = (
-        ds~load_uint(256), ds~load_msg_addr(), ds~load_ref(), ds
+        ds.load_ref(), ds.load_ref(), ds.load_dict(), ds.load_ref()
     );
 
-    cell storage_providers_dict = new_dict();
-    if (~ slice_empty?(storage_providers)) {
-        storage_providers_dict = storage_providers~load_dict();
-    }
-    return storage_providers_dict;
+    return storage_provider_contracts;
 }
 
-() save_storage_providers_dict(cell storage_providers_dict) impure inline {
+() save_storage_provider_contracts(cell storage_providers_dict) impure inline {
     var ds = get_data().begin_parse();
     var (
-        torrent_hash, owner_address, storage_providers, residue
+        bag_info, storage_fee_params, _, residue
     ) = (
-        ds~load_uint(256), ds~load_msg_addr(), ds~load_ref(), ds
+        ds.load_ref(), ds.load_ref(), ds.load_ref(), ds
     );
     set_data(
         begin_cell()
-          .store_uint(torrent_hash, 256)
-          .store_msg_addr(owner_address)
-          .store_dict(storage_providers_dict)
-          .store_slice(residue)
-          .end_cell()
+            .store_ref(bag_info)
+            .store_ref(storage_fee_params)
+            .store_dict(storage_providers_dict)
+            .store_slice(residue)
+            .end_cell()
+    ); 
+}
+
+cell load_storage_provider_last_proof_times() inline {
+    var ds = get_data().begin_parse();
+    var (
+        _, _, _, storage_provider_last_proof_times
+    ) = (
+        ds.load_ref(), ds.load_ref(), ds.load_dict(), ds.load_ref()
+    );
+
+    return storage_provider_contracts;
+}
+
+() save_storage_provider_last_proof_times(cell storage_provider_last_proof_times) impure inline {
+    var ds = get_data().begin_parse();
+    var (
+        bag_info, storage_fee_params, storage_provider_contracts, residue
+    ) = (
+        ds.load_ref(), ds.load_ref(), ds.load_ref(), ds
+    );
+    set_data(
+        begin_cell()
+            .store_ref(bag_info)
+            .store_ref(storage_fee_params)
+            .store_ref(storage_provider_contracts)
+            .store_ref(storage_provider_last_proof_times)
+            .store_slices(residue)
+            .end_cell()
+    );
+}
+
+cell load_storage_provider_fees() inline {
+    var ds = get_data().begin_parse();
+    var (
+        _, _, _, _, storage_provider_fees
+    ) = (
+        ds.load_ref(), ds.load_ref(), ds.load_ref(), ds.load_ref(), ds.load_dict()
+    );
+    return storage_provider_fees;
+}
+
+() save_storage_provider_fees(cell storage_provider_fees) impure inline {
+    var ds = get_data().begin_parse();
+    var (
+        bag_info, storage_fee_params, storage_provider_contracts, storage_provider_last_proof_times, residue
+    ) = (
+        ds.load_ref(), ds.load_ref(), ds.load_ref(), ds.load_ref(), ds
+    );
+    set_data(
+        begin_cell()
+            .store_ref(bag_info)
+            .store_ref(storage_fee_params)
+            .store_ref(storage_provider_contracts)
+            .store_ref(storage_provider_last_proof_times)
+            .store_ref(storage_provider_fees)
+            .store_slices(residue)
+            .end_cell()
+    );
+}
+
+cell load_storage_provider_fees_paid() inline {
+    var ds = get_data().begin_parse();
+    var (
+        _, _, _, _, _, storage_provider_fees_paid
+    ) = (
+        ds.load_ref(), ds.load_ref(), ds.load_ref(), ds.load_ref(), ds.load_ref(), ds.load_dict()
+    );
+    return storage_provider_fees_paid;
+}
+
+() save_storage_provider_fees_paid(cell storage_provider_fees_paid) impure inline {
+    var ds = get_data().begin_parse();
+    var (
+        bag_info, storage_fee_params, storage_provider_contracts, storage_provider_last_proof_times, storage_provider_fees, residue
+    ) = (
+        ds.load_ref(), ds.load_ref(), ds.load_ref(), ds.load_ref(), ds.load_ref(), ds
+    );
+    set_data(
+        begin_cell()
+            .store_ref(bag_info)
+            .store_ref(storage_fee_params)
+            .store_ref(storage_provider_contracts)
+            .store_ref(storage_provider_last_proof_times)
+            .store_ref(storage_provider_fees)
+            .store_ref(storage_provider_fees_paid)
+            .store_slices(residue)
+            .end_cell()
     );
 }
 
@@ -92,7 +206,7 @@ cell load_storage_providers_dict() inline {
     }
 
     var (
-        torrent_hash, owner_address, storage_providers, total_storage_fee, current_balance,
+        torrent_hash, owner_address, storage_provider_contracts, total_storage_fee, current_balance,
         file_merkle_hash, file_size_in_bytes, storage_effective_time, storage_expire_time
     ) = load_data();
 
@@ -107,7 +221,7 @@ cell load_storage_providers_dict() inline {
     save_storage_providers_dict(storage_providers_dict);
 
     cell msg = begin_cell()
-          .store_uint(0x18, 6)
+          .store_msg_flag(msg_flag::bounceable)
           .store_slice(storage_provider_contract_address)
           .store_coins(0)
           .store_uint(4 + 2, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
@@ -118,6 +232,105 @@ cell load_storage_providers_dict() inline {
     send_raw_message(msg, 64);
 }
 
+int effective_storage_providers_count() inline {
+    var (_, _, effective_storage_provider_count, _, _, _, _, _) = load_storage_fee_params();
+    return effective_storage_provider_count;
+}
+
+int last_storage_fee_distribute_time() inline {
+    var (_, _, _, _, _, storage_expire_time, _, _) = load_storage_fee_params();
+    var now = now();
+    return (now <= storage_expire_time) ? now : storage_expire_time;
+}
+
+int storage_fee_per_provider() inline {
+    var (
+        total_storage_fee, residual_storage_fee, effective_storage_provider_count, storage_fee_rate,
+        storage_effective_time, storage_expire_time,
+        last_update_time, storage_fee_per_provider_stored
+    ) = load_storage_fee_params();
+
+    if (effective_storage_provider_count == 0) {
+        return storage_fee_per_provider_stored;
+    }
+    return storage_fee_per_provider_stored + (
+        (last_storage_fee_distribute_time() - last_update_time) * storage_fee_rate * (10 ^ 18) / effective_storage_provider_count
+    );
+}
+
+;; function earned(address account) public view returns (uint256)
+int storage_fee_earned(slice provider_address) inline {
+    var storage_fee_per_provider = storage_fee_per_provider();
+    var storage_provider_fees_paid = load_storage_provider_fees_paid().dict_get(256, provider_address);
+    var storage_provider_fees = load_storage_provider_fees().dict_get(256, provider_address);
+    return (storage_fee_per_provider - storage_provider_fees_paid) / (10 ^ 18) + storage_provider_fees;
+}
+
+;; function notifyRewardAmount(uint256 reward) external onlyRewardsDistribution updateReward(address(0))
+() add_storage_fee(int fee) impure {
+    update_storage_fee_for_provider("");
+    var now = now();
+
+    var (
+        total_storage_fee, residual_storage_fee, effective_storage_provider_count, storage_fee_rate,
+        storage_effective_time, storage_expire_time,
+        last_update_time, storage_fee_per_provider_stored
+    ) = load_storage_fee_params();
+    throw_unless(error::storage_contract_already_expired, now < storage_expire_time);
+
+    var remaining = (storage_expire_time - now) * storage_fee_rate;
+    storage_fee_rate = (remaining + fee) / (storage_expire_time - now);
+    last_update_time = now;
+
+    save_storage_fee_params(
+        total_storage_fee + fee, residual_storage_fee + fee, effective_storage_provider_count, storage_fee_rate,
+        storage_effective_time, storage_expire_time, last_update_time, storage_fee_per_provider_stored
+    );
+}
+
+;; modifier updateReward(address account)
+() update_storage_fee_for_provider(slice provider_address) impure {
+    var storage_fee_per_provider_stored = storage_fee_per_provider();
+    var last_update_time = last_storage_fee_distribute_time();
+    var (
+        total_storage_fee, residual_storage_fee, effective_storage_provider_count, storage_fee_rate,
+        storage_effective_time, storage_expire_time,
+        _, _
+    ) = load_storage_fee_params();
+    save_storage_fee_params(
+        total_storage_fee, residual_storage_fee, effective_storage_provider_count, storage_fee_rate,
+        storage_effective_time, storage_expire_time, last_update_time, storage_fee_per_provider_stored
+    );
+
+    if ~ (provider_address.slice_refs_empty?()) {
+        var storage_provider_fees = load_storage_provider_fees();
+        var storage_provider_fees_paid = load_storage_provider_fees_paid();
+
+        var storage_fee_earned = storage_fee_earned(provider_address);
+        storage_provider_fees.dict_set(256, provider_address, storage_fee_earned);
+        storage_provider_fees_paid.dict_set(256, provider_address, storage_fee_per_provider_stored);
+
+        save_storage_provider_fees(storage_provider_fees);
+        save_storage_provider_fees_paid(storage_provider_fees_paid);
+    }
+}
+
+() on_submit_storage_proof(slice provider_address) impure {
+    var storage_provider_last_proof_times = load_storage_provider_last_proof_times();
+    var (last_proof_time, success?) = storage_provider_last_proof_times.dict_get?(256, provider_address);
+    if ~(success?) {
+        storage_provider_last_proof_times.dict_set(256, provider_address, now());
+        save_storage_provider_last_proof_times(storage_provider_last_proof_times);
+        update_storage_fee_for_provider(provider_address);
+        return();
+    }
+
+    ;; todo: only reward user if submit proof within 1 hour
+    if (now() - last_proof_time > max_storage_proof_span) {
+        
+    }
+}
+
 () recv_internal(int msg_value, cell in_msg_full, slice in_msg_body) impure {
     slice cs = in_msg_full.begin_parse();
     int flags = cs~load_uint(4);
@@ -126,19 +339,55 @@ cell load_storage_providers_dict() inline {
         return ();
     }
     slice sender_address = cs~load_msg_addr();
-
     if (in_msg_body.slice_empty?()) {
-        return add_to_balance(msg_value);
+        add_storage_fee(msg_value);
+        return ();
     }
+
     int op = in_msg_body~load_uint(32);
     if (op == 0) {
-        return add_to_balance(msg_value);
+        add_storage_fee(msg_value);
+        return ();
     }
 
     int query_id = in_msg_body~load_uint(64);
-
     if (op == op::accept_storage_contract) {
         deploy_storage_provider_contract(sender_address);
+        return ();
+    }
+
+    if (op == op::on_submit_storage_proof) {
+        slice provider_address = cs~load_msg_addr();
+
+        ;; check send from a storage-provider contract
+        cell storage_providers_dict = load_storage_providers_dict();
+        var (provider_contract_address, success?) = storage_providers_dict.dict_get?(256, provider_address);
+        if (success?) {
+            throw(error::unregistered_storage_provider);
+        }
+        throw_unless(error::unauthorized, provider_contract_address == sender_address);
+
+        var storage_provider_last_proof_times = load_storage_provider_last_proof_times();
+        if (storage_provider_last_proof_times.dict_empty?()) {
+            ;; On first storage proof report, the storage contract becomes effective
+            var (
+                total_storage_fee, residual_storage_fee, effective_storage_provider_count, storage_fee_rate,
+                storage_effective_time, storage_expire_time,
+                last_update_time, storage_fee_per_provider_stored
+            ) = load_storage_fee_params();
+            storage_effective_time = now();
+            storage_expire_time = storage_effective_time + default_storage_period;
+            save_storage_fee_params(
+                total_storage_fee, residual_storage_fee, effective_storage_provider_count, storage_fee_rate,
+                storage_effective_time, storage_expire_time,
+                last_update_time, storage_fee_per_provider_stored
+            );
+
+            add_storage_fee(total_storage_fee);
+        }
+
+        on_submit_storage_proof();
+
         return ();
     }
 

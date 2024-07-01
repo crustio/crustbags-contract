@@ -45,13 +45,13 @@ cell load_bags_dict() inline {
 
 () deploy_storage_contract(
     cell storage_contract_code, slice owner_address, int query_id,
-    int file_size, int merkle_hash, int torrent_hash, int total_storage_fee
+    int file_size, int merkle_hash, int torrent_hash, int initial_storage_fee
 ) impure {
     throw_unless(error::file_too_small, file_size >= minimal_file_size);
     throw_unless(error::file_too_big, file_size <= maximal_file_size);
 
     cell state_init = build_storage_contract_stateinit(
-        storage_contract_code, torrent_hash, owner_address, total_storage_fee, merkle_hash, file_size
+        storage_contract_code, torrent_hash, owner_address, initial_storage_fee, merkle_hash, file_size
     );
     slice storage_contract_address = calculate_storage_contract_address(state_init);
 
@@ -64,7 +64,7 @@ cell load_bags_dict() inline {
     save_bags_dict(bags_dict);
 
     cell msg = begin_cell()
-            .store_uint(0x18, 6)
+            .store_msg_flag(msg_flag::bounceable)
             .store_slice(storage_contract_address)
             .store_coins(0)
             .store_uint(4 + 2, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)

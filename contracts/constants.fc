@@ -9,11 +9,12 @@ const int maximal_file_size = 1024 * 1024 * 1024 * 10; ;; 10 GB
 
 const op::update_admin = "op::update_admin"c;
 const op::deploy_storage_contract = "op::deploy_storage_contract"c;
-const op::accept_storage_contract = "op::accept_storage_contract"c;
-const op::deploy_storage_provider_contract = "op::deploy_storage_provider_contract"c;
+const op::register_as_storage_provider = "op::register_as_storage_provider"c;
+const op::unregister_as_storage_provider = "op::unregister_as_storage_provider"c;
+const op::claim_storage_rewards = "op::claim_storage_rewards"c;
 const op::submit_storage_proof = "op::submit_storage_proof"c;
-const op::on_submit_storage_proof = "op::on_submit_storage_proof"c;
 const op::add_storage_fee = "op::add_storage_fee"c;
+const op::recycle_undistributed_storage_fees = "op::recycle_undistributed_storage_fees"c;
 
 const error::unknown_op = 0xffff;
 const error::wrong_workchain = 333;
@@ -25,4 +26,5 @@ const error::file_too_big = 1004;
 const error::storage_provider_already_registered = 1005;
 const error::invalid_storage_proof = 1006;
 const error::unregistered_storage_provider = 1007;
-const error::storage_contract_already_expired = 1008;
+;; const error::storage_contract_already_expired = 1008;
+const error::storage_order_unexpired = 1008;

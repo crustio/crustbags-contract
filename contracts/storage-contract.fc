@@ -333,6 +333,12 @@ int per_sec_total_rewards_pending_settle_for_provider(slice provider_address) in
     storage_providers_dict.udict_set_ref(256, provider_addr, begin_cell().store_uint(1, 1).end_cell());
     save_storage_providers_dict(storage_providers_dict);
 
+    var (torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes) = load_bag_info();
+    var next_proof = rand(file_size_in_bytes);
+    var storage_provider_next_proofs_dict = load_storage_provider_next_proofs();
+    storage_provider_next_proofs_dict.udict_set_ref(256, provider_addr, begin_cell().store_uint(64, next_proof).end_cell());
+    save_storage_provider_next_proofs(storage_provider_next_proofs_dict);
+
     var last_work_report_time_dict = load_storage_provider_last_proof_times();
     last_work_report_time_dict.udict_set_ref(256, provider_addr, begin_cell().store_uint(32, now()).end_cell());
     save_storage_provider_last_proof_times(last_work_report_time_dict);
@@ -443,19 +449,26 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, cell file_dic
 }
 
 () on_submit_storage_proof(slice provider_address, int valid) impure {
-    var storage_providers_dict = load_storage_providers();
-    var (_, success?) = storage_providers_dict.dict_get?(256, provider_address);
-    if (~success?) {
+    (int wc, int provider_addr) = parse_std_addr(provider_address);
+
+    var storage_providers_dict = load_storage_providers_dict();
+    var (_, success?) = storage_providers_dict.udict_get?(256, provider_addr);
+    if (~ success?) {
         throw(error::unregistered_storage_provider);
     }
-    if (~valid) {
+    if (~ valid) {
         return ();
     }
 
+    var last_work_report_time = 0;
     var last_work_report_time_dict = load_storage_provider_last_proof_times();
-    var last_work_report_time = last_work_report_time_dict.dict_get(256, provider_address);
+    var (val, found?) = last_work_report_time_dict.udict_get?(256, provider_addr);
+    if (found?) {
+        last_work_report_time = val~load_uint(32);
+    }
+
     var in_report_window = now() - last_work_report_time <= max_storage_proof_span;
-    if (~in_report_window) {
+    if (~ in_report_window) {
         var (
             started, total_storage_providers, total_rewards, total_rewards_per_sec, undistributed_rewards,
             per_sec_per_provider_total_rewards_settled, period_finish, last_settle_time
@@ -467,10 +480,10 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, cell file_dic
         );
     }
 
-    _do_settle_rewards(provider_address, 0, in_report_window);
+    do_settle_rewards(provider_address, 0, in_report_window);
 
     var last_work_report_time_dict = load_storage_provider_last_proof_times();
-    last_work_report_time_dict.dict_set(256, provider_address, now());
+    last_work_report_time_dict.udict_set_ref(256, provider_addr, begin_cell().store_uint(32, now()).end_cell());
     save_storage_provider_last_proof_times(last_work_report_time_dict);
 }
 
@@ -482,15 +495,14 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, cell file_dic
         return ();
     }
     slice sender_address = cs~load_msg_addr();
+    (int wc, int sender_addr) = parse_std_addr(sender_address);
     if (in_msg_body.slice_empty?()) {
-        add_storage_fee(msg_value);
-        return ();
+        throw(error::unknown_op);
     }
 
     int op = in_msg_body~load_uint(32);
     if (op == 0) {
-        add_storage_fee(msg_value);
-        return ();
+        throw(error::unknown_op);
     }
 
     int query_id = in_msg_body~load_uint(64);
@@ -498,7 +510,7 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, cell file_dic
         register_as_provider(sender_address);
         return ();
     }
-    if (op == unregister_as_storage_provider) {
+    if (op == op::unregister_as_storage_provider) {
         exit(sender_address);
         return ();
     }
@@ -514,8 +526,17 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, cell file_dic
             torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes
         ) = load_bag_info();
         var storage_provider_next_proofs_dict = load_storage_provider_next_proofs();
-        var next_proof = storage_provider_next_proofs_dict.dict_get(256, sender_address);
+
+        var (val, found?) = storage_provider_next_proofs_dict.udict_get?(256, sender_addr);
+        if (~ found?) {
+            throw(error::invalid_state);
+        }
+        var next_proof = val~load_uint(64);
         var valid = check_proof(file_merkle_hash, next_proof, file_size_in_bytes, file_dict_proof);
+
+        next_proof = rand(file_size_in_bytes);
+        storage_provider_next_proofs_dict.udict_set_ref(256, sender_addr, begin_cell().store_uint(64, next_proof).end_cell());
+        save_storage_provider_next_proofs(storage_provider_next_proofs_dict);
 
         on_submit_storage_proof(sender_address, valid);
         return ();
@@ -529,10 +550,11 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, cell file_dic
 }
 
 int earned(slice provider_address) method_id {
+    (int wc, int provider_addr) = parse_std_addr(provider_address);
     var total_rewards_settled_and_unclaimed_for_providers = load_total_rewards_settled_and_unclaimed_for_providers();
-    var (earned, success?) = total_rewards_settled_and_unclaimed_for_providers.dict_get?(256, provider_address);
+    var (earned, success?) = total_rewards_settled_and_unclaimed_for_providers.udict_get?(256, provider_addr);
     if (success?) {
-        return earned;
+        return earned~load_coins();
     }
     return 0;
 }

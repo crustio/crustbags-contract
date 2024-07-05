@@ -33,38 +33,3 @@ cell build_storage_contract_stateinit(
 
     return state_init;
 }
-
-slice calculate_storage_provider_contract_address(cell state_init) inline {
-    return begin_cell()
-        .store_uint(4, 3)
-        .store_int(workchain(), 8)
-        .store_uint(cell_hash(state_init), 256)
-        .end_cell()
-        .begin_parse();
-}
-
-cell build_storage_provider_contract_stateinit(
-    cell storage_provider_contract_code, storage_contract_address,
-    int torrent_hash, slice owner_address, slice provider_address,
-    int file_merkle_hash, int file_size_in_bytes, int next_proof_byte, int last_proof_time
-) {
-    cell data = begin_cell()
-            .store_slice(storage_contract_address)
-            .store_uint(torrent_hash, 256)
-            .store_slice(owner_address)
-            .store_slice(provider_address)
-            .store_uint(file_merkle_hash, 256)
-            .store_uint(file_size_in_bytes, 64)
-            .store_uint(0, 64)  ;; storagenext_proof_byte_effective_time = 0
-            .store_uint(0, 32)  ;; last_proof_time = 0
-            .end_cell();
-
-    cell state_init = begin_cell()
-            .store_uint(0, 2)
-            .store_maybe_ref(storage_provider_contract_code)
-            .store_maybe_ref(data)
-            .store_uint(0, 1)
-            .end_cell();
-
-    return state_init;
-}

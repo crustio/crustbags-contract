@@ -17,16 +17,16 @@ export function tonBagsContentToCell(content: TonBagsContent) {
 }
 
 export type TonBagsConfig = {
-    admin_address: Address;
-    bag_storage_contracts: Cell;
-    storage_contract_code: Cell;
+    adminAddress: Address;
+    bagStorageContracts: Cell;
+    storageContractCode: Cell;
 };
 
 export function tonBagsConfigToCell(config: TonBagsConfig): Cell {
     return beginCell()
-        .storeAddress(config.admin_address)
-        .storeRef(config.bag_storage_contracts)
-        .storeRef(config.storage_contract_code)
+        .storeAddress(config.adminAddress)
+        .storeRef(config.bagStorageContracts)
+        .storeRef(config.storageContractCode)
         .endCell();
 }
 
@@ -60,8 +60,8 @@ export class TonBags implements Contract {
 
     static updateAdminMessage(newOwner: Address) {
         return beginCell()
-            .storeUint(op_update_admin, 32)
-            .storeUint(0, 64) // op, queryId
+            .storeUint(op_update_admin, 32)  // op
+            .storeUint(0, 64) // queryId
             .storeAddress(newOwner)
             .endCell();
     }
@@ -73,4 +73,39 @@ export class TonBags implements Contract {
             value: toNano('0.1'),
         });
     }
+
+    static placeStorageOrderMessage(fileSize: bigint, merkleHash: bigint) {
+        const torrentInfo = beginCell()
+            .storeUint(0, 32)  // piece_size
+            .storeUint(fileSize, 64)
+            .endCell();
+        return beginCell()
+            .storeRef(torrentInfo)
+            .storeUint(merkleHash, 256)
+            .endCell();;
+    }
+    
+    async sendPlaceStorageOrder(
+        provider: ContractProvider, via: Sender,
+        fileSize: bigint, merkleHash: bigint, totalStorageFee: bigint
+    ) {
+        await provider.internal(via, {
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: TonBags.placeStorageOrderMessage(fileSize, merkleHash),
+            value: totalStorageFee + toNano('0.1'),
+        });
+    }
+
+    async getAdminAddress(provider: ContractProvider) {
+        const result = await provider.get('get_admin_address', []);
+        return result.stack.readAddress();
+    }
+
+    async getStorageContractAddress(provider: ContractProvider, bagId: bigint) {
+        const result = await provider.get('get_storage_contract_address', [
+            { type: 'slice', cell: beginCell().storeInt(bagId, 256).endCell() },
+        ]);
+        return result.stack.readAddress();
+    }
+
 }

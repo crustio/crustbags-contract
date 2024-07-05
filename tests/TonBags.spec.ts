@@ -1,81 +1,76 @@
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
-import { Cell, toNano } from '@ton/core';
+import { Cell, beginCell, toNano } from '@ton/core';
 import { TonBags } from '../wrappers/TonBags';
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
+import { error_unauthorized } from '../wrappers/constants';
 
 describe('TonBags', () => {
-    let code: Cell;
-
-    beforeAll(async () => {
-        code = await compile('TonBags');
-    });
+    let tonBagsCode: Cell;
+    let storageContractCode: Cell;
 
     let blockchain: Blockchain;
     let deployer: SandboxContract<TreasuryContract>;
+    let notDeployer: SandboxContract<TreasuryContract>;
     let tonBags: SandboxContract<TonBags>;
 
-    beforeEach(async () => {
+    let defaultContent: Cell;
+
+    beforeAll(async () => {
+        tonBagsCode = await compile('TonBags');
+        storageContractCode = await compile('StorageContract');
+
         blockchain = await Blockchain.create();
+        deployer = await blockchain.treasury('deployer');
+        notDeployer = await blockchain.treasury('notDeployer');
+        defaultContent = beginCell().endCell();
 
         tonBags = blockchain.openContract(
             TonBags.createFromConfig(
                 {
-                    id: 0,
-                    counter: 0,
+                    adminAddress: deployer.address,
+                    bagStorageContracts: defaultContent,
+                    storageContractCode,
                 },
-                code
+                tonBagsCode
             )
         );
-
-        deployer = await blockchain.treasury('deployer');
-
+        
         const deployResult = await tonBags.sendDeploy(deployer.getSender(), toNano('0.05'));
-
         expect(deployResult.transactions).toHaveTransaction({
             from: deployer.address,
             to: tonBags.address,
             deploy: true,
-            success: true,
+            success: true
         });
     });
+
 
     it('should deploy', async () => {
         // the check is done inside beforeEach
         // blockchain and tonBags are ready to use
     });
 
-    it('should increase counter', async () => {
-        const increaseTimes = 3;
-        for (let i = 0; i < increaseTimes; i++) {
-            console.log(`increase ${i + 1}/${increaseTimes}`);
+    it('minter admin can change admin', async () => {
+        // console.log('Deployer: ', deployer.address);
+        // console.log('Not Deployer: ', notDeployer.address);
+        expect((await tonBags.getAdminAddress()).equals(deployer.address)).toBe(true);
 
-            const increaser = await blockchain.treasury('increaser' + i);
+        let changeAdmin = await tonBags.sendUpdateAdmin(deployer.getSender(), notDeployer.address);
+        expect((await tonBags.getAdminAddress()).equals(notDeployer.address)).toBe(true);
 
-            const counterBefore = await tonBags.getCounter();
+        changeAdmin = await tonBags.sendUpdateAdmin(notDeployer.getSender(), deployer.address);
+        expect((await tonBags.getAdminAddress()).equals(deployer.address)).toBe(true);
+    });
 
-            console.log('counter before increasing', counterBefore);
-
-            const increaseBy = Math.floor(Math.random() * 100);
-
-            console.log('increasing by', increaseBy);
-
-            const increaseResult = await tonBags.sendIncrease(increaser.getSender(), {
-                increaseBy,
-                value: toNano('0.05'),
-            });
-
-            expect(increaseResult.transactions).toHaveTransaction({
-                from: increaser.address,
-                to: tonBags.address,
-                success: true,
-            });
-
-            const counterAfter = await tonBags.getCounter();
-
-            console.log('counter after increasing', counterAfter);
-
-            expect(counterAfter).toBe(counterBefore + increaseBy);
-        }
+    it('not a minter admin can not change admin', async () => {
+        let changeAdmin = await tonBags.sendUpdateAdmin(notDeployer.getSender(), notDeployer.address);
+        expect((await tonBags.getAdminAddress()).equals(deployer.address)).toBe(true);
+        expect(changeAdmin.transactions).toHaveTransaction({
+            from: notDeployer.address,
+            to: tonBags.address,
+            aborted: true,
+            exitCode: error_unauthorized
+        });
     });
 });

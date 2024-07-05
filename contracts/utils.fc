@@ -1,6 +1,6 @@
 slice calculate_storage_contract_address(cell state_init) inline {
     return begin_cell()
-        .store_uint(4, 3)
+        .store_uint(4, 3) ;; 0x100 : $10 + anycast (Maybe = 0)
         .store_int(workchain(), 8)
         .store_uint(cell_hash(state_init), 256)
         .end_cell()
@@ -9,26 +9,27 @@ slice calculate_storage_contract_address(cell state_init) inline {
 
 cell build_storage_contract_stateinit(
     cell storage_contract_code,
-    int torrent_hash, slice owner_address, int initial_storage_fee,
+    int torrent_hash, slice owner_address,
     int file_merkle_hash, int file_size_in_bytes
 ) {
-    cell data = begin_cell()
-            .store_uint(torrent_hash, 256)
-            .store_slice(owner_address)
-            .store_dict(new_dict())  ;; storage_providers
-            .store_coins(initial_storage_fee)
-            ;; .store_coins(total_storage_fee)  ;; current_balance = total_storage_fee
-            .store_uint(file_merkle_hash, 256)
-            .store_uint(file_size_in_bytes, 64)
-            .store_uint(0, 32)  ;; storage_effective_time = 0
-            .store_uint(0, 32)  ;; storage_expire_time = 0
-            .end_cell();
+    cell bag_info = begin_cell()
+        .store_uint(torrent_hash, 256)
+        .store_slice(owner_address)
+        .store_uint(file_merkle_hash, 256)
+        .store_uint(file_size_in_bytes, 64)
+        .end_cell();
 
     cell state_init = begin_cell()
-            .store_uint(0, 2)
+            .store_uint(0, 2) ;; split_depth (Maybe = 0) and special (Maybe = 0)
             .store_maybe_ref(storage_contract_code)
-            .store_maybe_ref(data)
-            .store_uint(0, 1)
+            .store_maybe_ref(bag_info)
+            .store_maybe_ref(new_dict())  ;; rewards_params
+            .store_maybe_ref(new_dict())  ;; storage_providers
+            .store_maybe_ref(new_dict())  ;; storage_provider_last_proof_times
+            .store_maybe_ref(new_dict())  ;; storage_provider_next_proofs
+            .store_maybe_ref(new_dict())  ;; total_rewards_settled_and_unclaimed_for_providers
+            .store_maybe_ref(new_dict())  ;; per_sec_total_rewards_settled_for_providers
+            .store_uint(0, 1) ;; libraries - empty cell
             .end_cell();
 
     return state_init;

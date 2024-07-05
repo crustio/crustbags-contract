@@ -1,12 +1,33 @@
-import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode } from '@ton/core';
+import {
+    Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode, toNano
+} from '@ton/core';
+
+import { op_update_admin } from './constants';
+
+export type TonBagsContent = {
+    type: 0 | 1;
+    uri: string;
+};
+
+export function tonBagsContentToCell(content: TonBagsContent) {
+    return beginCell()
+        .storeUint(content.type, 8)
+        .storeStringTail(content.uri)
+        .endCell();
+}
 
 export type TonBagsConfig = {
-    id: number;
-    counter: number;
+    admin_address: Address;
+    bag_storage_contracts: Cell;
+    storage_contract_code: Cell;
 };
 
 export function tonBagsConfigToCell(config: TonBagsConfig): Cell {
-    return beginCell().storeUint(config.id, 32).storeUint(config.counter, 32).endCell();
+    return beginCell()
+        .storeAddress(config.admin_address)
+        .storeRef(config.bag_storage_contracts)
+        .storeRef(config.storage_contract_code)
+        .endCell();
 }
 
 export const Opcodes = {
@@ -14,7 +35,10 @@ export const Opcodes = {
 };
 
 export class TonBags implements Contract {
-    constructor(readonly address: Address, readonly init?: { code: Cell; data: Cell }) {}
+    constructor(
+        readonly address: Address,
+        readonly init?: { code: Cell; data: Cell }
+    ) {}
 
     static createFromAddress(address: Address) {
         return new TonBags(address);
@@ -34,33 +58,19 @@ export class TonBags implements Contract {
         });
     }
 
-    async sendIncrease(
-        provider: ContractProvider,
-        via: Sender,
-        opts: {
-            increaseBy: number;
-            value: bigint;
-            queryID?: number;
-        }
-    ) {
+    static updateAdminMessage(newOwner: Address) {
+        return beginCell()
+            .storeUint(op_update_admin, 32)
+            .storeUint(0, 64) // op, queryId
+            .storeAddress(newOwner)
+            .endCell();
+    }
+
+    async sendUpdateAdmin(provider: ContractProvider, via: Sender, newOwner: Address) {
         await provider.internal(via, {
-            value: opts.value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
-            body: beginCell()
-                .storeUint(Opcodes.increase, 32)
-                .storeUint(opts.queryID ?? 0, 64)
-                .storeUint(opts.increaseBy, 32)
-                .endCell(),
+            body: TonBags.updateAdminMessage(newOwner),
+            value: toNano('0.1'),
         });
-    }
-
-    async getCounter(provider: ContractProvider) {
-        const result = await provider.get('get_counter', []);
-        return result.stack.readNumber();
-    }
-
-    async getID(provider: ContractProvider) {
-        const result = await provider.get('get_id', []);
-        return result.stack.readNumber();
     }
 }

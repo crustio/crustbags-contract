@@ -37,3 +37,8 @@ builder store_msgbody_prefix_ref(builder b, cell ref) inline {
     s~skip_bits(32); ;; 0xFFFFFFFF
     return (s, ());
 }
+
+(slice, (int)) ~load_op(slice s) inline { return s.load_uint(32); }
+(slice, (int)) ~load_query_id(slice s) inline { return s.load_uint(64); }
+builder store_op(builder b, int op) inline { return b.store_uint(op, 32); }
+builder store_query_id(builder b, int query_id) inline { return b.store_uint(query_id, 64); }

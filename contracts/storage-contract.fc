@@ -547,6 +547,8 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, cell file_dic
         recycle(sender_address, to_address);
         return ();
     }
+
+    throw(error::unknown_op);
 }
 
 int earned(slice provider_address) method_id {

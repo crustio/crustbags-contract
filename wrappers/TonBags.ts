@@ -1,5 +1,5 @@
 import {
-    Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode, toNano
+    Address, beginCell, Cell, Contract, Dictionary, contractAddress, ContractProvider, Sender, SendMode, toNano
 } from '@ton/core';
 
 import { op_update_admin } from './constants';
@@ -18,15 +18,15 @@ export function tonBagsContentToCell(content: TonBagsContent) {
 
 export type TonBagsConfig = {
     adminAddress: Address;
-    bagStorageContracts: Cell;
     storageContractCode: Cell;
+    bagStorageContractDict: Dictionary<number, Address>;
 };
 
 export function tonBagsConfigToCell(config: TonBagsConfig): Cell {
     return beginCell()
         .storeAddress(config.adminAddress)
-        .storeRef(config.bagStorageContracts)
         .storeRef(config.storageContractCode)
+        .storeDict(config.bagStorageContractDict)
         .endCell();
 }
 
@@ -74,24 +74,21 @@ export class TonBags implements Contract {
         });
     }
 
-    static placeStorageOrderMessage(fileSize: bigint, merkleHash: bigint) {
-        const torrentInfo = beginCell()
-            .storeUint(0, 32)  // piece_size
-            .storeUint(fileSize, 64)
-            .endCell();
+    static placeStorageOrderMessage(torrentHash: bigint, fileSize: bigint, merkleHash: bigint) {
         return beginCell()
-            .storeRef(torrentInfo)
+            .storeUint(torrentHash, 256)
+            .storeUint(fileSize, 64)
             .storeUint(merkleHash, 256)
             .endCell();;
     }
     
     async sendPlaceStorageOrder(
-        provider: ContractProvider, via: Sender,
+        provider: ContractProvider, via: Sender, torrentHash: bigint,
         fileSize: bigint, merkleHash: bigint, totalStorageFee: bigint
     ) {
         await provider.internal(via, {
             sendMode: SendMode.PAY_GAS_SEPARATELY,
-            body: TonBags.placeStorageOrderMessage(fileSize, merkleHash),
+            body: TonBags.placeStorageOrderMessage(torrentHash, fileSize, merkleHash),
             value: totalStorageFee + toNano('0.1'),
         });
     }
@@ -101,11 +98,12 @@ export class TonBags implements Contract {
         return result.stack.readAddress();
     }
 
-    async getStorageContractAddress(provider: ContractProvider, bagId: bigint) {
+    async getStorageContractAddress(provider: ContractProvider, torrentHash: bigint) {
         const result = await provider.get('get_storage_contract_address', [
-            { type: 'slice', cell: beginCell().storeInt(bagId, 256).endCell() },
+            { type: 'int', value: torrentHash },
+            // { type: 'slice', cell: beginCell().storeUint(torrentHash, 256).endCell() }
         ]);
-        return result.stack.readAddress();
+        return result.stack.readAddressOpt();
     }
 
 }

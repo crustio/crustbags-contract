@@ -1,44 +1,48 @@
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
-import { Cell, beginCell, toNano } from '@ton/core';
+import { Address, Cell, Dictionary, beginCell, toNano } from '@ton/core';
 import { TonBags } from '../wrappers/TonBags';
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
 import { error_unauthorized } from '../wrappers/constants';
+import { getMerkleRoot } from "./merkleProofUtils";
 
 describe('TonBags', () => {
     let tonBagsCode: Cell;
     let storageContractCode: Cell;
 
     let blockchain: Blockchain;
-    let deployer: SandboxContract<TreasuryContract>;
-    let notDeployer: SandboxContract<TreasuryContract>;
+    let Alice: SandboxContract<TreasuryContract>;
+    let Bob: SandboxContract<TreasuryContract>;
+    let Caro: SandboxContract<TreasuryContract>;
     let tonBags: SandboxContract<TonBags>;
 
-    let defaultContent: Cell;
+    let emptyBagStorageContractDict: Dictionary<number, Address>;
 
     beforeAll(async () => {
         tonBagsCode = await compile('TonBags');
         storageContractCode = await compile('StorageContract');
 
         blockchain = await Blockchain.create();
-        deployer = await blockchain.treasury('deployer');
-        notDeployer = await blockchain.treasury('notDeployer');
-        defaultContent = beginCell().endCell();
+        Alice = await blockchain.treasury('Alice');
+        Bob = await blockchain.treasury('Bob');
+        Caro = await blockchain.treasury('Caro');
+        // emptyBagStorageContractDict = beginCell().endCell();
+        emptyBagStorageContractDict = Dictionary.empty();
 
         tonBags = blockchain.openContract(
             TonBags.createFromConfig(
                 {
-                    adminAddress: deployer.address,
-                    bagStorageContracts: defaultContent,
+                    adminAddress: Alice.address,
                     storageContractCode,
+                    bagStorageContractDict: emptyBagStorageContractDict,
                 },
                 tonBagsCode
             )
         );
         
-        const deployResult = await tonBags.sendDeploy(deployer.getSender(), toNano('0.05'));
+        const deployResult = await tonBags.sendDeploy(Alice.getSender(), toNano('0.05'));
         expect(deployResult.transactions).toHaveTransaction({
-            from: deployer.address,
+            from: Alice.address,
             to: tonBags.address,
             deploy: true,
             success: true
@@ -52,25 +56,44 @@ describe('TonBags', () => {
     });
 
     it('minter admin can change admin', async () => {
-        // console.log('Deployer: ', deployer.address);
-        // console.log('Not Deployer: ', notDeployer.address);
-        expect((await tonBags.getAdminAddress()).equals(deployer.address)).toBe(true);
+        expect(await tonBags.getAdminAddress()).toEqualAddress(Alice.address);
 
-        let changeAdmin = await tonBags.sendUpdateAdmin(deployer.getSender(), notDeployer.address);
-        expect((await tonBags.getAdminAddress()).equals(notDeployer.address)).toBe(true);
+        let changeAdmin = await tonBags.sendUpdateAdmin(Alice.getSender(), Bob.address);
+        expect(await tonBags.getAdminAddress()).toEqualAddress(Bob.address);
 
-        changeAdmin = await tonBags.sendUpdateAdmin(notDeployer.getSender(), deployer.address);
-        expect((await tonBags.getAdminAddress()).equals(deployer.address)).toBe(true);
+        changeAdmin = await tonBags.sendUpdateAdmin(Bob.getSender(), Alice.address);
+        expect(await tonBags.getAdminAddress()).toEqualAddress(Alice.address);
     });
 
     it('not a minter admin can not change admin', async () => {
-        let changeAdmin = await tonBags.sendUpdateAdmin(notDeployer.getSender(), notDeployer.address);
-        expect((await tonBags.getAdminAddress()).equals(deployer.address)).toBe(true);
+        let changeAdmin = await tonBags.sendUpdateAdmin(Bob.getSender(), Bob.address);
+        expect(await tonBags.getAdminAddress()).toEqualAddress(Alice.address);
         expect(changeAdmin.transactions).toHaveTransaction({
-            from: notDeployer.address,
+            from: Bob.address,
             to: tonBags.address,
             aborted: true,
             exitCode: error_unauthorized
         });
     });
+
+    it('anyone could place order to create a storage contract', async () => {
+        const dataArray = [
+            0x0BAD0010n,
+            0x60A70020n,
+            0xBEEF0030n,
+            0xDEAD0040n,
+            0xCA110050n,
+            0x0E660060n,
+            0xFACE0070n,
+            0xBAD00080n,
+            0x060D0091n
+        ];
+        const merkleRoot = getMerkleRoot(dataArray);
+        const torrentHash = BigInt('0x476848C3350EA64ACCC09218917132998267F2ABC283097082FD41D511CAF11B');
+        const fileSize = 1024n * 1024n * 10n;  // 10MB
+
+        expect(await tonBags.getStorageContractAddress(torrentHash)).toBeNull();
+        
+    });
+
 });

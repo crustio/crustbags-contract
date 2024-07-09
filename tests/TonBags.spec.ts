@@ -3,7 +3,7 @@ import { Address, Cell, Dictionary, beginCell, toNano } from '@ton/core';
 import { TonBags } from '../wrappers/TonBags';
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
-import { error_unauthorized } from '../wrappers/constants';
+import { error_unauthorized, error_duplicated_torrent_hash } from '../wrappers/constants';
 import { getMerkleRoot } from "./merkleProofUtils";
 
 describe('TonBags', () => {
@@ -101,8 +101,17 @@ describe('TonBags', () => {
             success: true
         });
 
-        // console.log(await tonBags.getStorageContractAddress(torrentHash));
         expect(await tonBags.getStorageContractAddress(torrentHash)).not.toBeNull();
+
+        trans = await tonBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'));
+        expect(trans.transactions).toHaveTransaction({
+            from: Caro.address,
+            to: tonBags.address,
+            aborted: true,
+            exitCode: error_duplicated_torrent_hash,
+            success: false
+        });
+
         
     });
 

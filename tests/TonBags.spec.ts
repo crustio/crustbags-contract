@@ -93,6 +93,16 @@ describe('TonBags', () => {
         const fileSize = 1024n * 1024n * 10n;  // 10MB
 
         expect(await tonBags.getStorageContractAddress(torrentHash)).toBeNull();
+
+        let trans = await tonBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'));
+        expect(trans.transactions).toHaveTransaction({
+            from: Bob.address,
+            to: tonBags.address,
+            success: true
+        });
+
+        // console.log(await tonBags.getStorageContractAddress(torrentHash));
+        expect(await tonBags.getStorageContractAddress(torrentHash)).not.toBeNull();
         
     });
 

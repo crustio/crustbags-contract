@@ -2,7 +2,7 @@ import {
     Address, beginCell, Cell, Contract, Dictionary, contractAddress, ContractProvider, Sender, SendMode, toNano
 } from '@ton/core';
 
-import { op_update_admin } from './constants';
+import { op_update_admin, op_place_storage_order } from './constants';
 
 export type TonBagsContent = {
     type: 0 | 1;
@@ -76,6 +76,8 @@ export class TonBags implements Contract {
 
     static placeStorageOrderMessage(torrentHash: bigint, fileSize: bigint, merkleHash: bigint) {
         return beginCell()
+            .storeUint(op_place_storage_order, 32)  // op
+            .storeUint(0, 64) // queryId
             .storeUint(torrentHash, 256)
             .storeUint(fileSize, 64)
             .storeUint(merkleHash, 256)

@@ -1,6 +1,6 @@
 const CHUNK_SIZE = 64;
 const int one_ton = 1000000000; ;;10^9
-const int min_storage_fee = one_ton / 100; ;; 0.01 TON minimal storage fee
+const int min_storage_fee = one_ton / 10; ;; 0.1 TON minimal storage fee
 ;; const int rate_per_mb_day = one_ton / 100; ;; 0.01 TON per 1 MB per day
 const int default_storage_period = 60 * 60 * 24 * 180; ;; 180 days
 const int max_storage_proof_span = 60 * 60; ;; 1 hour
@@ -23,7 +23,7 @@ const error::invalid_state = 402;
 const error::not_enough_storage_fee = 1001;
 const error::duplicated_torrent_hash = 1002;
 const error::file_too_small = 1003;
-const error::file_too_big = 1004;
+const error::file_too_large = 1004;
 const error::storage_provider_already_registered = 1005;
 const error::invalid_storage_proof = 1006;
 const error::unregistered_storage_provider = 1007;

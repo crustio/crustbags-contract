@@ -3,7 +3,10 @@ import { Address, Cell, Dictionary, beginCell, toNano } from '@ton/core';
 import { TonBags } from '../wrappers/TonBags';
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
-import { error_unauthorized, error_duplicated_torrent_hash } from '../wrappers/constants';
+import {
+    error_unauthorized, error_not_enough_storage_fee, error_duplicated_torrent_hash,
+    error_file_too_small, error_file_too_large
+} from '../wrappers/constants';
 import { getMerkleRoot } from "./merkleProofUtils";
 
 describe('TonBags', () => {
@@ -112,7 +115,45 @@ describe('TonBags', () => {
             success: false
         });
 
-        
+        const torrentHash2 = BigInt('0x476848C3350EA64ACCC09218917132998267F2ABC283097082FD41D511CAF11C');
+        trans = await tonBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash2, fileSize, merkleRoot, toNano('1'));
+        expect(trans.transactions).toHaveTransaction({
+            from: Caro.address,
+            to: tonBags.address,
+            success: true
+        });
+        expect(await tonBags.getStorageContractAddress(torrentHash2)).not.toBeNull();
+        expect(await tonBags.getStorageContractAddress(torrentHash)).not.toEqual(await tonBags.getStorageContractAddress(torrentHash2));
+
+        const torrentHash3 = BigInt('0x476848C3350EA64ACCC09218917132998267F2ABC283097082FD41D511CAF11D');
+        trans = await tonBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash3, 0n, merkleRoot, toNano('1'));
+        expect(trans.transactions).toHaveTransaction({
+            from: Caro.address,
+            to: tonBags.address,
+            aborted: true,
+            exitCode: error_file_too_small,
+            success: false
+        });
+
+        trans = await tonBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash3, 1024n * 1024n * 1024n * 100n, merkleRoot, toNano('1'));
+        expect(trans.transactions).toHaveTransaction({
+            from: Caro.address,
+            to: tonBags.address,
+            aborted: true,
+            exitCode: error_file_too_large,
+            success: false
+        });
+
+        trans = await tonBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash3, 1024n * 1024n * 100n, merkleRoot, toNano('0.01'));
+        expect(trans.transactions).toHaveTransaction({
+            from: Caro.address,
+            to: tonBags.address,
+            aborted: true,
+            exitCode: error_not_enough_storage_fee,
+            success: false
+        });
+
     });
+
 
 });

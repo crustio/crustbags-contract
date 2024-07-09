@@ -47,7 +47,7 @@ cell load_bag_storage_contracts_dict() inline {
     int torrent_hash, int file_size, int merkle_hash, int initial_storage_fee
 ) impure {
     throw_unless(error::file_too_small, file_size >= minimal_file_size);
-    throw_unless(error::file_too_big, file_size <= maximal_file_size);
+    throw_unless(error::file_too_large, file_size <= maximal_file_size);
 
     cell state_init = build_storage_contract_stateinit(
         storage_contract_code, torrent_hash, owner_address, merkle_hash, file_size

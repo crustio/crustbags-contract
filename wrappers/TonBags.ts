@@ -91,7 +91,7 @@ export class TonBags implements Contract {
         await provider.internal(via, {
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: TonBags.placeStorageOrderMessage(torrentHash, fileSize, merkleHash),
-            value: totalStorageFee + toNano('0.1'),
+            value: totalStorageFee + toNano('0.01'),
         });
     }
 

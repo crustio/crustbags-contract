@@ -1,6 +1,7 @@
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
 import { Address, Cell, Dictionary, beginCell, toNano } from '@ton/core';
 import { TonBags } from '../wrappers/TonBags';
+import { StorageContract } from '../wrappers/StorageContract';
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
 import {
@@ -29,7 +30,6 @@ describe('TonBags', () => {
         Alice = await blockchain.treasury('Alice');
         Bob = await blockchain.treasury('Bob');
         Caro = await blockchain.treasury('Caro');
-        // emptyBagStorageContractDict = beginCell().endCell();
         emptyBagStorageContractDict = Dictionary.empty();
 
         tonBags = blockchain.openContract(
@@ -51,7 +51,6 @@ describe('TonBags', () => {
             success: true
         });
     });
-
 
     it('should deploy', async () => {
         // the check is done inside beforeEach
@@ -152,6 +151,35 @@ describe('TonBags', () => {
             exitCode: error_not_enough_storage_fee,
             success: false
         });
+
+    });
+
+    it('storage contract works', async () => {
+        const dataArray = [ 0x0BAD0010n, 0x60A70020n, 0xBEEF0030n, 0xDEAD0040n, 0xCA110050n, 0x0E660060n, 0xFACE0070n, 0xBAD00080n, 0x060D0091n ];
+        const merkleRoot = getMerkleRoot(dataArray);
+        const torrentHash = BigInt('0x676848C3350EA64ACCC09218917132998267F2ABC283097082FD41D511CAF11B');
+        const fileSize = 1024n * 1024n * 10n;  // 10MB
+
+        expect(await tonBags.getStorageContractAddress(torrentHash)).toBeNull();
+        let trans = await tonBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'));
+        expect(trans.transactions).toHaveTransaction({
+            from: Bob.address,
+            to: tonBags.address,
+            success: true
+        });
+        expect(await tonBags.getStorageContractAddress(torrentHash)).not.toBeNull();
+
+        const storageContract = blockchain.openContract(
+            StorageContract.createFromAddress(
+                await tonBags.getStorageContractAddress(torrentHash) || Alice.address
+            )
+        );
+
+        let [contractTorrentHash, ownerAddress, fileMerkleHash, fileSizeInBytes] = await storageContract.getBagInfo();
+        expect(contractTorrentHash).toEqual(torrentHash);
+        expect(ownerAddress).toEqualAddress(Bob.address);
+        expect(fileMerkleHash).toEqual(merkleRoot);
+        expect(fileSizeInBytes).toEqual(fileSize);
 
     });
 

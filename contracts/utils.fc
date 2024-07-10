@@ -20,6 +20,24 @@ cell build_storage_contract_stateinit(
             .store_uint(file_merkle_hash, 256)
             .store_uint(file_size_in_bytes, 64)
             .end_cell();
+    
+    cell storage_providers_info = begin_cell()
+            .store_dict(new_dict())  ;; storage_providers
+            .store_dict(new_dict())  ;; storage_provider_last_proof_times
+            .store_dict(new_dict())  ;; storage_provider_next_proofs
+            .end_cell();
+
+    cell rewards_settlement_info = begin_cell()
+            .store_dict(new_dict())  ;; total_rewards_settled_and_unclaimed_for_providers
+            .store_dict(new_dict())  ;; per_sec_total_rewards_settled_for_providers
+            .end_cell();
+    
+    cell init_data = begin_cell()
+            .store_ref(bag_info)
+            .store_dict(new_dict())  ;; rewards_params dict
+            .store_ref(storage_providers_info)
+            .store_ref(rewards_settlement_info)
+            .end_cell();
 
     var state_init = begin_cell()
             .store_uint(0, 1) ;; split_depth:(Maybe (## 5))
@@ -28,23 +46,8 @@ cell build_storage_contract_stateinit(
             .store_uint(1, 1) ;; (Maybe ^Cell)
             .store_uint(0, 1) ;; (HashmapE 256 SimpleLib)
             .store_ref(storage_contract_code)
-            .store_ref(bag_info)
+            .store_ref(init_data)
             .end_cell();
-
-  
-
-    ;; cell state_init = begin_cell()
-    ;;         .store_uint(0, 2) ;; split_depth (Maybe = 0) and special (Maybe = 0)
-    ;;         .store_maybe_ref(storage_contract_code)
-    ;;         .store_maybe_ref(bag_info)
-    ;;         .store_dict(new_dict())  ;; rewards_params
-    ;;         .store_dict(new_dict())  ;; storage_providers
-    ;;         .store_dict(new_dict())  ;; storage_provider_last_proof_times
-    ;;         .store_dict(new_dict())  ;; storage_provider_next_proofs
-    ;;         .store_dict(new_dict())  ;; total_rewards_settled_and_unclaimed_for_providers
-    ;;         .store_dict(new_dict())  ;; per_sec_total_rewards_settled_for_providers
-    ;;         .store_uint(0, 1) ;; libraries - empty cell
-    ;;         .end_cell();
 
     return state_init;
 }

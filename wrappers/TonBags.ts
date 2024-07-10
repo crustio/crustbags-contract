@@ -30,10 +30,6 @@ export function tonBagsConfigToCell(config: TonBagsConfig): Cell {
         .endCell();
 }
 
-export const Opcodes = {
-    increase: 0x7e8764ef,
-};
-
 export class TonBags implements Contract {
     constructor(
         readonly address: Address,

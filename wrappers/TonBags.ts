@@ -46,6 +46,11 @@ export class TonBags implements Contract {
         return new TonBags(contractAddress(workchain, init), init);
     }
 
+    async getBalance(provider: ContractProvider) {
+        const { balance } = await provider.getState();
+        return balance;
+    }
+
     async sendDeploy(provider: ContractProvider, via: Sender, value: bigint) {
         await provider.internal(via, {
             value,
@@ -70,13 +75,14 @@ export class TonBags implements Contract {
         });
     }
 
-    static placeStorageOrderMessage(torrentHash: bigint, fileSize: bigint, merkleHash: bigint) {
+    static placeStorageOrderMessage(torrentHash: bigint, fileSize: bigint, merkleHash: bigint, totalStorageFee: bigint) {
         return beginCell()
             .storeUint(op_place_storage_order, 32)  // op
             .storeUint(0, 64) // queryId
             .storeUint(torrentHash, 256)
             .storeUint(fileSize, 64)
             .storeUint(merkleHash, 256)
+            .storeCoins(totalStorageFee)
             .endCell();;
     }
     
@@ -86,8 +92,8 @@ export class TonBags implements Contract {
     ) {
         await provider.internal(via, {
             sendMode: SendMode.PAY_GAS_SEPARATELY,
-            body: TonBags.placeStorageOrderMessage(torrentHash, fileSize, merkleHash),
-            value: totalStorageFee + toNano('0.01'),
+            body: TonBags.placeStorageOrderMessage(torrentHash, fileSize, merkleHash, totalStorageFee),
+            value: totalStorageFee + toNano('0.1'),
         });
     }
 

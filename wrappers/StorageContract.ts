@@ -32,6 +32,11 @@ export class StorageContract implements Contract {
       return new StorageContract(contractAddress(workchain, init), init);
   }
 
+  async getBalance(provider: ContractProvider) {
+      const { balance } = await provider.getState();
+      return balance;
+  }
+
   async sendDeploy(provider: ContractProvider, via: Sender, value: bigint) {
       await provider.internal(via, {
           value,

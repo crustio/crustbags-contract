@@ -1,5 +1,5 @@
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
-import { Address, Cell, Dictionary, beginCell, toNano } from '@ton/core';
+import { Address, Cell, Dictionary, beginCell, toNano, fromNano } from '@ton/core';
 import { TonBags } from '../wrappers/TonBags';
 import { StorageContract } from '../wrappers/StorageContract';
 import '@ton/test-utils';
@@ -43,13 +43,21 @@ describe('TonBags', () => {
             )
         );
         
-        const deployResult = await tonBags.sendDeploy(Alice.getSender(), toNano('0.05'));
+        const deployResult = await tonBags.sendDeploy(Alice.getSender(), toNano('0.1'));
         expect(deployResult.transactions).toHaveTransaction({
             from: Alice.address,
             to: tonBags.address,
             deploy: true,
             success: true
         });
+
+        // https://github.com/ton-org/sandbox?tab=readme-ov-file#viewing-logs
+        await blockchain.setVerbosityForAddress(tonBags.address, {
+            print: true,
+            blockchainLogs: false,
+            vmLogs: 'none',  // 'none' | 'vm_logs' | 'vm_logs_full'
+            debugLogs: true
+        })
     });
 
     it('should deploy', async () => {
@@ -155,13 +163,17 @@ describe('TonBags', () => {
     });
 
     it('storage contract works', async () => {
+        console.log(fromNano(await tonBags.getBalance()));
+        const tonBagsBalanceBeforeDeployStorageContract = await tonBags.getBalance();
+
         const dataArray = [ 0x0BAD0010n, 0x60A70020n, 0xBEEF0030n, 0xDEAD0040n, 0xCA110050n, 0x0E660060n, 0xFACE0070n, 0xBAD00080n, 0x060D0091n ];
         const merkleRoot = getMerkleRoot(dataArray);
         const torrentHash = BigInt('0x676848C3350EA64ACCC09218917132998267F2ABC283097082FD41D511CAF11B');
         const fileSize = 1024n * 1024n * 10n;  // 10MB
+        const totalStorageFee = toNano('1');
 
         expect(await tonBags.getStorageContractAddress(torrentHash)).toBeNull();
-        let trans = await tonBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'));
+        let trans = await tonBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, totalStorageFee);
         expect(trans.transactions).toHaveTransaction({
             from: Bob.address,
             to: tonBags.address,
@@ -181,6 +193,15 @@ describe('TonBags', () => {
         expect(fileMerkleHash).toEqual(merkleRoot);
         expect(fileSizeInBytes).toEqual(fileSize);
         expect(await storageContract.getEarned(Bob.address)).toEqual(0n);
+
+        console.log(fromNano(await tonBags.getBalance()));
+        console.log(fromNano(await storageContract.getBalance()));
+
+        // TonBags balance should remain unchanged
+        expect(await tonBags.getBalance()).toEqual(tonBagsBalanceBeforeDeployStorageContract);
+
+        // Storage fees and remaining gas should go to new storage contract
+        expect(await storageContract.getBalance()).toBeGreaterThan(totalStorageFee);
 
     });
 

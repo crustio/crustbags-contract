@@ -52,11 +52,11 @@ export class StorageContract implements Contract {
       ];
   }
 
-  async earned(provider: ContractProvider, providerAddress: Address) {
+  async getEarned(provider: ContractProvider, providerAddress: Address) {
       const result = await provider.get('earned', [
           { type: 'slice', cell: beginCell().storeAddress(providerAddress).endCell() },
       ]);
-      return result.stack.readAddressOpt();
+      return result.stack.readBigNumber();
   }
   
 }

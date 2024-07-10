@@ -180,6 +180,7 @@ describe('TonBags', () => {
         expect(ownerAddress).toEqualAddress(Bob.address);
         expect(fileMerkleHash).toEqual(merkleRoot);
         expect(fileSizeInBytes).toEqual(fileSize);
+        expect(await storageContract.getEarned(Bob.address)).toEqual(0n);
 
     });
 

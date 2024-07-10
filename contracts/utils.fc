@@ -21,6 +21,19 @@ cell build_storage_contract_stateinit(
             .store_uint(file_size_in_bytes, 64)
             .end_cell();
     
+    ;; started, total_storage_providers, total_rewards, total_rewards_per_sec, undistributed_rewards,
+    ;;    per_sec_per_provider_total_rewards_settled, period_finish, last_settle_time
+    cell rewards_params = begin_cell()
+            .store_uint(0, 1)
+            .store_uint(0, 32)
+            .store_coins(0)
+            .store_coins(0)
+            .store_coins(0)
+            .store_coins(0)
+            .store_uint(0, 32)
+            .store_uint(0, 32)
+            .end_cell();
+    
     cell storage_providers_info = begin_cell()
             .store_dict(new_dict())  ;; storage_providers
             .store_dict(new_dict())  ;; storage_provider_last_proof_times
@@ -34,7 +47,7 @@ cell build_storage_contract_stateinit(
     
     cell init_data = begin_cell()
             .store_ref(bag_info)
-            .store_dict(new_dict())  ;; rewards_params dict
+            .store_ref(rewards_params)
             .store_ref(storage_providers_info)
             .store_ref(rewards_settlement_info)
             .end_cell();

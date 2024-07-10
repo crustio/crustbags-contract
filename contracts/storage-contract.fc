@@ -13,7 +13,7 @@
     var ds = get_data().begin_parse();
 
     var bag_info = ds~load_ref();
-    var rewards_params = ds~load_dict();
+    var rewards_params = ds~load_ref();
 
     var storage_providers_info = ds~load_ref().begin_parse();
     var storage_providers = storage_providers_info~load_dict();
@@ -44,7 +44,7 @@
 
 (int, int, int, int, int, int, int, int) load_rewards_params() inline {
     var ds = get_data().begin_parse();
-    var (_, rewards_params, residue) = (ds~load_ref(), ds~load_dict(), ds);
+    var (_, rewards_params, residue) = (ds~load_ref(), ds~load_ref(), ds);
 
     ds = rewards_params.begin_parse();
     var (
@@ -69,7 +69,7 @@
     var (
         bag_info, _, residue
     ) = (
-        ds~load_ref(), ds~load_dict(), ds
+        ds~load_ref(), ds~load_ref(), ds
     );
     var rewards_params = begin_cell()
         .store_uint(started, 1)
@@ -96,7 +96,7 @@ cell load_storage_providers_dict() inline {
     var (
         _, _, storage_providers_info, residue
     ) = (
-        ds~load_ref(), ds~load_dict(), ds~load_ref(), ds
+        ds~load_ref(), ds~load_ref(), ds~load_ref(), ds
     );
 
     ds = storage_providers_info.begin_parse();
@@ -108,7 +108,7 @@ cell load_storage_providers_dict() inline {
     var (
         bag_info, rewards_params, storage_providers_info, residue
     ) = (
-        ds~load_ref(), ds~load_dict(), ds~load_ref(), ds
+        ds~load_ref(), ds~load_ref(), ds~load_ref(), ds
     );
 
     ds = storage_providers_info.begin_parse();
@@ -139,7 +139,7 @@ cell load_storage_provider_last_proof_times() inline {
     var (
         _, _, storage_providers_info, residue
     ) = (
-        ds~load_ref(), ds~load_dict(), ds~load_ref(), ds
+        ds~load_ref(), ds~load_ref(), ds~load_ref(), ds
     );
 
     ds = storage_providers_info.begin_parse();
@@ -156,7 +156,7 @@ cell load_storage_provider_last_proof_times() inline {
     var (
         bag_info, rewards_params, storage_providers_info, residue
     ) = (
-        ds~load_ref(), ds~load_dict(), ds~load_ref(), ds
+        ds~load_ref(), ds~load_ref(), ds~load_ref(), ds
     );
 
     ds = storage_providers_info.begin_parse();
@@ -187,7 +187,7 @@ cell load_storage_provider_next_proofs() inline {
     var (
         _, _, storage_providers_info, residue
     ) = (
-        ds~load_ref(), ds~load_dict(), ds~load_ref(), ds
+        ds~load_ref(), ds~load_ref(), ds~load_ref(), ds
     );
 
     ds = storage_providers_info.begin_parse();
@@ -204,7 +204,7 @@ cell load_storage_provider_next_proofs() inline {
     var (
         bag_info, rewards_params, storage_providers_info, residue
     ) = (
-        ds~load_ref(), ds~load_dict(), ds~load_ref(), ds
+        ds~load_ref(), ds~load_ref(), ds~load_ref(), ds
     );
 
     ds = storage_providers_info.begin_parse();
@@ -235,7 +235,7 @@ cell load_total_rewards_settled_and_unclaimed_for_providers() inline {
     var (
         _, _, _, rewards_settlement_info
     ) = (
-        ds~load_ref(), ds~load_dict(), ds~load_ref(), ds~load_ref()
+        ds~load_ref(), ds~load_ref(), ds~load_ref(), ds~load_ref()
     );
     
     ds = rewards_settlement_info.begin_parse();
@@ -252,7 +252,7 @@ cell load_total_rewards_settled_and_unclaimed_for_providers() inline {
     var (
         bag_info, rewards_params, storage_providers_info, rewards_settlement_info
     ) = (
-        ds~load_ref(), ds~load_dict(), ds~load_ref(), ds~load_ref()
+        ds~load_ref(), ds~load_ref(), ds~load_ref(), ds~load_ref()
     );
 
     ds = rewards_settlement_info.begin_parse();
@@ -282,7 +282,7 @@ cell load_per_sec_total_rewards_settled_for_providers() inline {
     var (
         _, _, _, rewards_settlement_info
     ) = (
-        ds~load_ref(), ds~load_dict(), ds~load_ref(), ds~load_ref()
+        ds~load_ref(), ds~load_ref(), ds~load_ref(), ds~load_ref()
     );
 
     ds = rewards_settlement_info.begin_parse();
@@ -299,7 +299,7 @@ cell load_per_sec_total_rewards_settled_for_providers() inline {
     var (
         bag_info, rewards_params, storage_providers_info, rewards_settlement_info
     ) = (
-        ds~load_ref(), ds~load_dict(), ds~load_ref(), ds~load_ref()
+        ds~load_ref(), ds~load_ref(), ds~load_ref(), ds~load_ref()
     );
 
     ds = rewards_settlement_info.begin_parse();
@@ -426,6 +426,7 @@ int per_sec_total_rewards_pending_settle_for_provider(slice provider_address) in
     save_storage_providers_dict(storage_providers_dict);
 
     var (torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes) = load_bag_info();
+    throw_unless(error::invalid_storage_provider, ~ equal_slice_bits(provider_address, owner_address));
     var next_proof = rand(file_size_in_bytes);
     var storage_provider_next_proofs_dict = load_storage_provider_next_proofs();
     storage_provider_next_proofs_dict.udict_set_ref(256, provider_addr, begin_cell().store_uint(64, next_proof).end_cell());
@@ -645,6 +646,30 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, cell file_dic
 
 (int, slice, int, int) get_bag_info() method_id {
     return load_bag_info();
+}
+
+int started() method_id {
+    var (
+        started, total_storage_providers, total_rewards, total_rewards_per_sec, undistributed_rewards,
+        per_sec_per_provider_total_rewards_settled, period_finish, last_settle_time
+    ) = load_rewards_params();
+    return started;
+}
+
+int get_period_finish() method_id {
+    var (
+        started, total_storage_providers, total_rewards, total_rewards_per_sec, undistributed_rewards,
+        per_sec_per_provider_total_rewards_settled, period_finish, last_settle_time
+    ) = load_rewards_params();
+    return period_finish;
+}
+
+int get_total_storage_providers() method_id {
+    var (
+        started, total_storage_providers, total_rewards, total_rewards_per_sec, undistributed_rewards,
+        per_sec_per_provider_total_rewards_settled, period_finish, last_settle_time
+    ) = load_rewards_params();
+    return total_storage_providers;
 }
 
 int earned(slice provider_address) method_id {

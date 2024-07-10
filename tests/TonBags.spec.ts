@@ -6,7 +6,7 @@ import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
 import {
     error_unauthorized, error_not_enough_storage_fee, error_duplicated_torrent_hash,
-    error_file_too_small, error_file_too_large
+    error_file_too_small, error_file_too_large, error_storage_order_unexpired
 } from '../wrappers/constants';
 import { getMerkleRoot } from "./merkleProofUtils";
 
@@ -18,6 +18,7 @@ describe('TonBags', () => {
     let Alice: SandboxContract<TreasuryContract>;
     let Bob: SandboxContract<TreasuryContract>;
     let Caro: SandboxContract<TreasuryContract>;
+    let Dave: SandboxContract<TreasuryContract>;
     let tonBags: SandboxContract<TonBags>;
 
     let emptyBagStorageContractDict: Dictionary<number, Address>;
@@ -30,6 +31,7 @@ describe('TonBags', () => {
         Alice = await blockchain.treasury('Alice');
         Bob = await blockchain.treasury('Bob');
         Caro = await blockchain.treasury('Caro');
+        Dave = await blockchain.treasury('Dave');
         emptyBagStorageContractDict = Dictionary.empty();
 
         tonBags = blockchain.openContract(
@@ -202,6 +204,20 @@ describe('TonBags', () => {
 
         // Storage fees and remaining gas should go to new storage contract
         expect(await storageContract.getBalance()).toBeGreaterThan(totalStorageFee);
+
+        // Not started until first registered storage provider
+        expect(await storageContract.getStarted()).toBeFalsy();
+        expect(await storageContract.getPeriodFinish()).toEqual(0n);
+
+        // Can't recycle pool before start or finish
+        trans = await storageContract.sendRecycleUndistributedStorageFees(Bob.getSender(), Bob.address);
+        expect(trans.transactions).toHaveTransaction({
+            from: Bob.address,
+            to: storageContract.address,
+            aborted: true,
+            exitCode: error_storage_order_unexpired,
+            success: false
+        });
 
     });
 

@@ -28,3 +28,4 @@ const error::storage_provider_already_registered = 1005;
 const error::invalid_storage_proof = 1006;
 const error::unregistered_storage_provider = 1007;
 const error::storage_order_unexpired = 1008;
+const error::invalid_storage_provider = 1009;

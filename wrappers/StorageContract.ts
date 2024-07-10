@@ -9,6 +9,7 @@ import {
   SendMode,
   toNano,
 } from '@ton/core';
+import { op_recycle_undistributed_storage_fees } from './constants';
 
 export type StorageContractConfig = {};
 
@@ -57,11 +58,42 @@ export class StorageContract implements Contract {
       ];
   }
 
+  async getStarted(provider: ContractProvider) {
+    const result = await provider.get('started', []);
+    return result.stack.readBoolean();
+  }
+
+  async getPeriodFinish(provider: ContractProvider) {
+    const result = await provider.get('get_period_finish', []);
+    return result.stack.readBigNumber();
+  }
+
+  async getTotalStorageProviders(provider: ContractProvider) {
+    const result = await provider.get('get_total_storage_providers', []);
+    return result.stack.readBigNumber();
+  }
+
   async getEarned(provider: ContractProvider, providerAddress: Address) {
       const result = await provider.get('earned', [
           { type: 'slice', cell: beginCell().storeAddress(providerAddress).endCell() },
       ]);
       return result.stack.readBigNumber();
+  }
+
+  async sendRecycleUndistributedStorageFees(
+      provider: ContractProvider, via: Sender, toAddress: Address
+  ) {
+      const messsage = beginCell()
+          .storeUint(op_recycle_undistributed_storage_fees, 32) // op
+          .storeUint(0, 64) // queryId
+          .storeAddress(toAddress)
+          .endCell();
+
+      await provider.internal(via, {
+          sendMode: SendMode.PAY_GAS_SEPARATELY,
+          body: messsage,
+          value: toNano('0.1'),
+      });
   }
   
 }

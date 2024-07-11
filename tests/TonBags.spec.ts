@@ -6,9 +6,12 @@ import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
 import {
     error_unauthorized, error_not_enough_storage_fee, error_duplicated_torrent_hash,
-    error_file_too_small, error_file_too_large, error_storage_order_unexpired, error_unregistered_storage_provider
+    error_file_too_small, error_file_too_large, error_storage_order_unexpired, error_unregistered_storage_provider,
+    op_recycle_undistributed_storage_fees, op_unregister_as_storage_provider, op_submit_storage_proof,
+    op_register_as_storage_provider
 } from '../wrappers/constants';
 import { getMerkleRoot } from "./merkleProofUtils";
+import { expectBigNumberEquals, default_storage_period } from "./utils";
 
 describe('TonBags', () => {
     let tonBagsCode: Cell;
@@ -19,6 +22,7 @@ describe('TonBags', () => {
     let Bob: SandboxContract<TreasuryContract>;
     let Caro: SandboxContract<TreasuryContract>;
     let Dave: SandboxContract<TreasuryContract>;
+    let Eva: SandboxContract<TreasuryContract>;
     let tonBags: SandboxContract<TonBags>;
 
     let emptyBagStorageContractDict: Dictionary<number, Address>;
@@ -32,6 +36,7 @@ describe('TonBags', () => {
         Bob = await blockchain.treasury('Bob');
         Caro = await blockchain.treasury('Caro');
         Dave = await blockchain.treasury('Dave');
+        Eva = await blockchain.treasury('Eva');
         emptyBagStorageContractDict = Dictionary.empty();
 
         tonBags = blockchain.openContract(
@@ -201,6 +206,7 @@ describe('TonBags', () => {
 
         // TonBags balance should remain unchanged
         // expect(await tonBags.getBalance()).toEqual(tonBagsBalanceBeforeDeployStorageContract);
+        expectBigNumberEquals(tonBagsBalanceBeforeDeployStorageContract, await tonBags.getBalance());
 
         // Storage fees and remaining gas should go to new storage contract
         expect(await storageContract.getBalance()).toBeGreaterThan(totalStorageFee);
@@ -229,6 +235,29 @@ describe('TonBags', () => {
             success: false
         });
         expect(await storageContract.getNextProof(Bob.address)).toEqual(-1n);
+        trans = await storageContract.sendSubmitStorageProof(Bob.getSender(), merkleRoot);
+        expect(trans.transactions).toHaveTransaction({
+            from: Bob.address,
+            to: storageContract.address,
+            aborted: true,
+            exitCode: error_unregistered_storage_provider,
+            success: false
+        });
+
+        // Day 0: Caro regisers as a worker
+        const genesisTime = Math.floor(Date.now() / 1000);
+        blockchain.now = genesisTime;
+        trans = await storageContract.sendRegisterAsStorageProvider(Caro.getSender());
+        expect(trans.transactions).toHaveTransaction({
+            from: Caro.address,
+            to: storageContract.address,
+            op: op_register_as_storage_provider,
+            success: true
+        });
+        expect(await storageContract.getStarted()).toEqual(true);
+        expectBigNumberEquals(await storageContract.getPeriodFinish(), BigInt(genesisTime) + default_storage_period);
+        expect(await storageContract.getTotalStorageProviders()).toEqual(1n);
+
 
 
     });

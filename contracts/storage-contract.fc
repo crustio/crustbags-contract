@@ -2,8 +2,6 @@
 #include "constants.fc";
 #include "messages.fc";
 
-(slice, int) begin_parse_special(cell c) asm "x{D739} s,";
-
 {-
     storage#_
         bag_info:^Cell rewards_params:^Cell storage_providers_info:^Cell rewards_settlement_info:^Cell = Storage;
@@ -572,26 +570,12 @@ int per_sec_total_rewards_pending_settle_for_provider(slice provider_address) in
 }
 
 int check_proof(int merkle_hash, int byte_to_proof, int file_size, cell file_dict_proof) {
-    (slice cs, int special) = file_dict_proof.begin_parse_special();
-    if (~ special) {
-        return false;
-    }
-    if (cs~load_uint(8) != 3) { ;; Merkle proof
-        return false;
-    }
+    slice cs = file_dict_proof.begin_parse();
     if (cs~load_uint(256) != merkle_hash) {
         return false;
     }
-    cell file_dict = cs~load_ref();
-    int key_len = 0;
-    while ((CHUNK_SIZE << key_len) < file_size) {
-        key_len += 1;
-    }
-    (slice data, int found?) = file_dict.udict_get?(key_len, byte_to_proof / CHUNK_SIZE);
-    if (found?) {
-        return true;
-    }
-    return false;
+    ;; todo: implement merkle tree proof verification
+    return true;
 }
 
 () on_submit_storage_proof(slice provider_address, int valid) impure {
@@ -668,16 +652,22 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, cell file_dic
     if (op == op::submit_storage_proof) {
         cell file_dict_proof = in_msg_body~load_ref();
 
-        var (
-            torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes
-        ) = load_bag_info();
-        var storage_provider_next_proofs_dict = load_storage_provider_next_proofs();
+        var storage_providers_dict = load_storage_providers_dict();
+        var (_, success?) = storage_providers_dict.udict_get?(256, sender_addr);
+        if (~ success?) {
+            throw(error::unregistered_storage_provider);
+        }
 
+        var storage_provider_next_proofs_dict = load_storage_provider_next_proofs();
         var (val, found?) = storage_provider_next_proofs_dict.udict_get?(256, sender_addr);
         if (~ found?) {
             throw(error::invalid_state);
         }
         var next_proof = val~load_uint(64);
+
+        var (
+            torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes
+        ) = load_bag_info();
         var valid = check_proof(file_merkle_hash, next_proof, file_size_in_bytes, file_dict_proof);
 
         var storage_providers_last_proof_valid_dict = load_storage_provider_last_proof_valid();

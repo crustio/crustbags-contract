@@ -12,7 +12,7 @@ slice calculate_storage_contract_address(cell state_init) inline {
 cell build_storage_contract_stateinit(
     cell storage_contract_code,
     int torrent_hash, slice owner_address,
-    int file_merkle_hash, int file_size_in_bytes
+    int file_merkle_hash, int file_size_in_bytes, int total_rewards
 ) {
     cell bag_info = begin_cell()
             .store_uint(torrent_hash, 256)
@@ -26,7 +26,7 @@ cell build_storage_contract_stateinit(
     cell rewards_params = begin_cell()
             .store_uint(0, 1)
             .store_uint(0, 32)
-            .store_coins(0)
+            .store_coins(total_rewards)
             .store_coins(0)
             .store_coins(0)
             .store_coins(0)

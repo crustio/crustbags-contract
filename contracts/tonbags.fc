@@ -50,7 +50,7 @@ cell load_bag_storage_contracts_dict() inline {
     throw_unless(error::file_too_large, file_size <= maximal_file_size);
 
     cell state_init = build_storage_contract_stateinit(
-        storage_contract_code, torrent_hash, owner_address, merkle_hash, file_size
+        storage_contract_code, torrent_hash, owner_address, merkle_hash, file_size, initial_storage_fee
     );
     slice storage_contract_address = calculate_storage_contract_address(state_init);
 
@@ -106,8 +106,6 @@ cell load_bag_storage_contracts_dict() inline {
         int file_size = in_msg_body~load_uint(64);
         int merkle_hash = in_msg_body~load_uint(256);
         int total_storage_fee = in_msg_body~load_coins(); ;; VarUInteger 16
-
-        ;; ~dump(total_storage_fee);
 
         throw_unless(error::not_enough_storage_fee, total_storage_fee >= min_storage_fee);
         throw_unless(error::not_enough_storage_fee, msg_value >= total_storage_fee);

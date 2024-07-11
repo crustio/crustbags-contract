@@ -262,7 +262,7 @@ describe('TonBags', () => {
 
         // Total rewards: 0.1 $TON per day
         let totalRewardsPerHour = toNano('0.1') / 24n;
-        blockchain.now += ONE_HOUR_IN_SECS - 1;
+        blockchain.now += ONE_HOUR_IN_SECS - 10;
         trans = await storageContract.sendSubmitStorageProof(Caro.getSender(), merkleRoot);
         expect(trans.transactions).toHaveTransaction({
             from: Caro.address,
@@ -270,15 +270,15 @@ describe('TonBags', () => {
             op: op_submit_storage_proof,
             success: true
         });
-        console.log(await storageContract.getEarned(Alice.address), totalRewardsPerHour);
-        // expectBigNumberEquals(await storageContract.getEarned(Alice.address), totalRewardsPerHour);
-        // trans = await storageContract.sendClaimStorageRewards(Caro.getSender());
-        // expect(trans.transactions).toHaveTransaction({
-        //     from: Caro.address,
-        //     to: storageContract.address,
-        //     op: op_claim_storage_rewards,
-        //     success: true
-        // });
+        console.log(await storageContract.getEarned(Caro.address), totalRewardsPerHour);
+        // expectBigNumberEquals(await storageContract.getEarned(Caro.address), totalRewardsPerHour);
+        trans = await storageContract.sendClaimStorageRewards(Caro.getSender());
+        expect(trans.transactions).toHaveTransaction({
+            from: Caro.address,
+            to: storageContract.address,
+            op: op_claim_storage_rewards,
+            success: true
+        });
 
 
 

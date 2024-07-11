@@ -37,6 +37,7 @@ cell build_storage_contract_stateinit(
     cell storage_providers_info = begin_cell()
             .store_dict(new_dict())  ;; storage_providers
             .store_dict(new_dict())  ;; storage_provider_last_proof_times
+            .store_dict(new_dict())  ;; storage_provider_last_proof_valid
             .store_dict(new_dict())  ;; storage_provider_next_proofs
             .end_cell();
 

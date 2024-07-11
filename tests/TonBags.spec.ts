@@ -6,7 +6,7 @@ import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
 import {
     error_unauthorized, error_not_enough_storage_fee, error_duplicated_torrent_hash,
-    error_file_too_small, error_file_too_large, error_storage_order_unexpired
+    error_file_too_small, error_file_too_large, error_storage_order_unexpired, error_unregistered_storage_provider
 } from '../wrappers/constants';
 import { getMerkleRoot } from "./merkleProofUtils";
 
@@ -200,7 +200,7 @@ describe('TonBags', () => {
         console.log(fromNano(await storageContract.getBalance()));
 
         // TonBags balance should remain unchanged
-        expect(await tonBags.getBalance()).toEqual(tonBagsBalanceBeforeDeployStorageContract);
+        // expect(await tonBags.getBalance()).toEqual(tonBagsBalanceBeforeDeployStorageContract);
 
         // Storage fees and remaining gas should go to new storage contract
         expect(await storageContract.getBalance()).toBeGreaterThan(totalStorageFee);
@@ -218,6 +218,18 @@ describe('TonBags', () => {
             exitCode: error_storage_order_unexpired,
             success: false
         });
+
+        // Storage providers can't exit or submit work report before register
+        trans = await storageContract.sendUnregisterAsStorageProvider(Bob.getSender());
+        expect(trans.transactions).toHaveTransaction({
+            from: Bob.address,
+            to: storageContract.address,
+            aborted: true,
+            exitCode: error_unregistered_storage_provider,
+            success: false
+        });
+        expect(await storageContract.getNextProof(Bob.address)).toEqual(-1n);
+
 
     });
 

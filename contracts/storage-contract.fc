@@ -9,7 +9,7 @@
         bag_info:^Cell rewards_params:^Cell storage_providers_info:^Cell rewards_settlement_info:^Cell = Storage;
 -}
 
-(cell, cell, cell, cell, cell, cell, cell) load_data() inline {
+(cell, cell, cell, cell, cell, cell, cell, cell) load_data() inline {
     var ds = get_data().begin_parse();
 
     var bag_info = ds~load_ref();
@@ -18,6 +18,7 @@
     var storage_providers_info = ds~load_ref().begin_parse();
     var storage_providers = storage_providers_info~load_dict();
     var storage_provider_last_proof_times = storage_providers_info~load_dict();
+    var storage_provider_last_proof_valid = storage_providers_info~load_dict();
     var storage_provider_next_proofs = storage_providers_info~load_dict();
 
     var rewards_settlement_info = ds~load_ref().begin_parse();
@@ -25,7 +26,7 @@
     var per_sec_total_rewards_settled_for_providers = rewards_settlement_info~load_dict();
 
     return (
-        bag_info, rewards_params, storage_providers, storage_provider_last_proof_times, storage_provider_next_proofs, total_rewards_settled_and_unclaimed_for_providers, per_sec_total_rewards_settled_for_providers
+        bag_info, rewards_params, storage_providers, storage_provider_last_proof_times, storage_provider_last_proof_valid, storage_provider_next_proofs, total_rewards_settled_and_unclaimed_for_providers, per_sec_total_rewards_settled_for_providers
     );
 }
 
@@ -113,14 +114,15 @@ cell load_storage_providers_dict() inline {
 
     ds = storage_providers_info.begin_parse();
     var (
-        _, storage_provider_last_proof_times, storage_provider_next_proofs
+        _, storage_provider_last_proof_times, storage_provider_last_proof_valid, storage_provider_next_proofs
     ) = (
-        ds~load_dict(), ds~load_dict(), ds~load_dict()
+        ds~load_dict(), ds~load_dict(), ds~load_dict(), ds~load_dict()
     );
     
     var updated_storage_providers_info = begin_cell()
         .store_dict(storage_providers_dict)
         .store_dict(storage_provider_last_proof_times)
+        .store_dict(storage_provider_last_proof_valid)
         .store_dict(storage_provider_next_proofs)
         .end_cell();
 
@@ -144,9 +146,9 @@ cell load_storage_provider_last_proof_times() inline {
 
     ds = storage_providers_info.begin_parse();
     var (
-        storage_providers, storage_provider_last_proof_times, storage_provider_next_proofs
+        storage_providers, storage_provider_last_proof_times, storage_provider_last_proof_valid, storage_provider_next_proofs
     ) = (
-        ds~load_dict(), ds~load_dict(), ds~load_dict()
+        ds~load_dict(), ds~load_dict(), ds~load_dict(), ds~load_dict()
     );
     return storage_provider_last_proof_times;
 }
@@ -161,14 +163,64 @@ cell load_storage_provider_last_proof_times() inline {
 
     ds = storage_providers_info.begin_parse();
     var (
-        storage_providers, _, storage_provider_next_proofs
+        storage_providers, _, storage_provider_last_proof_valid, storage_provider_next_proofs
     ) = (
-        ds~load_dict(), ds~load_dict(), ds~load_dict()
+        ds~load_dict(), ds~load_dict(), ds~load_dict(), ds~load_dict()
     );
     
     storage_providers_info = begin_cell()
         .store_dict(storage_providers)
         .store_dict(storage_provider_last_proof_times)
+        .store_dict(storage_provider_last_proof_valid)
+        .store_dict(storage_provider_next_proofs)
+        .end_cell();
+
+    set_data(
+        begin_cell()
+            .store_ref(bag_info)
+            .store_ref(rewards_params)
+            .store_ref(storage_providers_info)
+            .store_slice(residue)
+            .end_cell()
+    );
+}
+
+cell load_storage_provider_last_proof_valid() inline {
+    var ds = get_data().begin_parse();
+    var (
+        _, _, storage_providers_info, residue
+    ) = (
+        ds~load_ref(), ds~load_ref(), ds~load_ref(), ds
+    );
+
+    ds = storage_providers_info.begin_parse();
+    var (
+        storage_providers, storage_provider_last_proof_times, storage_provider_last_proof_valid, storage_provider_next_proofs
+    ) = (
+        ds~load_dict(), ds~load_dict(), ds~load_dict(), ds~load_dict()
+    );
+    return storage_provider_last_proof_valid;
+}
+
+() save_storage_provider_last_proof_valid(cell storage_provider_last_proof_valid) impure inline {
+    var ds = get_data().begin_parse();
+    var (
+        bag_info, rewards_params, storage_providers_info, residue
+    ) = (
+        ds~load_ref(), ds~load_ref(), ds~load_ref(), ds
+    );
+
+    ds = storage_providers_info.begin_parse();
+    var (
+        storage_providers, storage_provider_last_proof_times, _, storage_provider_next_proofs
+    ) = (
+        ds~load_dict(), ds~load_dict(), ds~load_dict(), ds~load_dict()
+    );
+    
+    storage_providers_info = begin_cell()
+        .store_dict(storage_providers)
+        .store_dict(storage_provider_last_proof_times)
+        .store_dict(storage_provider_last_proof_valid)
         .store_dict(storage_provider_next_proofs)
         .end_cell();
 
@@ -192,9 +244,9 @@ cell load_storage_provider_next_proofs() inline {
 
     ds = storage_providers_info.begin_parse();
     var (
-        storage_providers, storage_provider_last_proof_times, storage_provider_next_proofs
+        storage_providers, storage_provider_last_proof_times, storage_provider_last_proof_valid, storage_provider_next_proofs
     ) = (
-        ds~load_dict(), ds~load_dict(), ds~load_dict()
+        ds~load_dict(), ds~load_dict(), ds~load_dict(), ds~load_dict()
     );
     return storage_provider_next_proofs;
 }
@@ -209,14 +261,15 @@ cell load_storage_provider_next_proofs() inline {
 
     ds = storage_providers_info.begin_parse();
     var (
-        storage_providers, storage_provider_last_proof_times, _
+        storage_providers, storage_provider_last_proof_times, storage_provider_last_proof_valid, _
     ) = (
-        ds~load_dict(), ds~load_dict(), ds~load_dict()
+        ds~load_dict(), ds~load_dict(), ds~load_dict(), ds~load_dict()
     );
     
     storage_providers_info = begin_cell()
         .store_dict(storage_providers)
         .store_dict(storage_provider_last_proof_times)
+        .store_dict(storage_provider_last_proof_valid)
         .store_dict(storage_provider_next_proofs)
         .end_cell();
 
@@ -627,6 +680,10 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, cell file_dic
         var next_proof = val~load_uint(64);
         var valid = check_proof(file_merkle_hash, next_proof, file_size_in_bytes, file_dict_proof);
 
+        var storage_providers_last_proof_valid_dict = load_storage_provider_last_proof_valid();
+        storage_providers_last_proof_valid_dict.udict_set_ref(256, sender_addr, begin_cell().store_uint(1, valid).end_cell());
+        save_storage_provider_last_proof_valid(storage_providers_last_proof_valid_dict);
+
         next_proof = rand(file_size_in_bytes);
         storage_provider_next_proofs_dict.udict_set_ref(256, sender_addr, begin_cell().store_uint(64, next_proof).end_cell());
         save_storage_provider_next_proofs(storage_provider_next_proofs_dict);
@@ -681,4 +738,27 @@ int earned(slice provider_address) method_id {
         return val~load_coins();
     }
     return 0;
+}
+
+int get_last_proof_valid(slice provider_address) method_id {
+    (int wc, int provider_addr) = parse_std_addr(provider_address);
+    var storage_providers_last_proof_valid_dict = load_storage_provider_last_proof_valid();
+
+    var (val, found?) = storage_providers_last_proof_valid_dict.udict_get?(256, provider_addr);
+    if (found?) {
+        return val~load_uint(1);
+    }
+    return 0;
+}
+
+int get_next_proof(slice provider_address) method_id {
+    (int wc, int provider_addr) = parse_std_addr(provider_address);
+    var storage_provider_next_proofs_dict = load_storage_provider_next_proofs();
+
+    var (val, found?) = storage_provider_next_proofs_dict.udict_get?(256, provider_addr);
+    if (~ found?) {
+        return -1;
+    }
+    var next_proof = val~load_uint(64);
+    return next_proof;
 }

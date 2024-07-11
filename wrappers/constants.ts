@@ -4,6 +4,7 @@ export const op_recycle_undistributed_storage_fees = 0x3c14cdbe;
 export const op_register_as_storage_provider = 0x1addc0dc;
 export const op_unregister_as_storage_provider = 0x401a6169;
 export const op_submit_storage_proof = 0x1055bfcc;
+export const op_claim_storage_rewards = 0xd6b37a4b;
 
 export const error_unauthorized = 401;
 export const error_not_enough_storage_fee = 1001;

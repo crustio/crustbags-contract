@@ -8,10 +8,10 @@ import {
     error_unauthorized, error_not_enough_storage_fee, error_duplicated_torrent_hash,
     error_file_too_small, error_file_too_large, error_storage_order_unexpired, error_unregistered_storage_provider,
     op_recycle_undistributed_storage_fees, op_unregister_as_storage_provider, op_submit_storage_proof,
-    op_register_as_storage_provider
+    op_register_as_storage_provider, op_claim_storage_rewards
 } from '../wrappers/constants';
 import { getMerkleRoot } from "./merkleProofUtils";
-import { expectBigNumberEquals, default_storage_period } from "./utils";
+import { ONE_HOUR_IN_SECS, expectBigNumberEquals, default_storage_period } from "./utils";
 
 describe('TonBags', () => {
     let tonBagsCode: Cell;
@@ -175,9 +175,11 @@ describe('TonBags', () => {
 
         const dataArray = [ 0x0BAD0010n, 0x60A70020n, 0xBEEF0030n, 0xDEAD0040n, 0xCA110050n, 0x0E660060n, 0xFACE0070n, 0xBAD00080n, 0x060D0091n ];
         const merkleRoot = getMerkleRoot(dataArray);
+        const someInvalidMerkleRoot = merkleRoot - 1n;
         const torrentHash = BigInt('0x676848C3350EA64ACCC09218917132998267F2ABC283097082FD41D511CAF11B');
         const fileSize = 1024n * 1024n * 10n;  // 10MB
-        const totalStorageFee = toNano('1');
+        // Distribute 18 $TON over 180 days. Workers must submit their report at most every 1 hour
+        const totalStorageFee = toNano('18');
 
         expect(await tonBags.getStorageContractAddress(torrentHash)).toBeNull();
         let trans = await tonBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, totalStorageFee);
@@ -257,6 +259,26 @@ describe('TonBags', () => {
         expect(await storageContract.getStarted()).toEqual(true);
         expectBigNumberEquals(await storageContract.getPeriodFinish(), BigInt(genesisTime) + default_storage_period);
         expect(await storageContract.getTotalStorageProviders()).toEqual(1n);
+
+        // Total rewards: 0.1 $TON per day
+        let totalRewardsPerHour = toNano('0.1') / 24n;
+        blockchain.now += ONE_HOUR_IN_SECS - 1;
+        trans = await storageContract.sendSubmitStorageProof(Caro.getSender(), merkleRoot);
+        expect(trans.transactions).toHaveTransaction({
+            from: Caro.address,
+            to: storageContract.address,
+            op: op_submit_storage_proof,
+            success: true
+        });
+        console.log(await storageContract.getEarned(Alice.address), totalRewardsPerHour);
+        // expectBigNumberEquals(await storageContract.getEarned(Alice.address), totalRewardsPerHour);
+        // trans = await storageContract.sendClaimStorageRewards(Caro.getSender());
+        // expect(trans.transactions).toHaveTransaction({
+        //     from: Caro.address,
+        //     to: storageContract.address,
+        //     op: op_claim_storage_rewards,
+        //     success: true
+        // });
 
 
 

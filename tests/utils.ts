@@ -1,5 +1,7 @@
 import '@ton/test-utils';
 
+export const ONE_HOUR_IN_SECS = 60 * 60;
+
 export const default_storage_period = 60n * 60n * 24n * 180n; // 180 days
 export const max_storage_proof_span = 60n * 60n; // 1 hour
 

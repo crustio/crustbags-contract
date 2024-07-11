@@ -11,7 +11,7 @@ import {
 } from '@ton/core';
 import {
   op_recycle_undistributed_storage_fees, op_unregister_as_storage_provider, op_submit_storage_proof,
-  op_register_as_storage_provider
+  op_register_as_storage_provider, op_claim_storage_rewards
 } from './constants';
 
 export type StorageContractConfig = {};
@@ -88,7 +88,7 @@ export class StorageContract implements Contract {
         { type: 'slice', cell: beginCell().storeAddress(providerAddress).endCell() },
     ]);
     return result.stack.readBigNumber();
-}
+  }
 
   async sendRecycleUndistributedStorageFees(
       provider: ContractProvider, via: Sender, toAddress: Address
@@ -143,6 +143,21 @@ export class StorageContract implements Contract {
           .storeUint(op_submit_storage_proof, 32) // op
           .storeUint(0, 64) // queryId
           .storeRef(beginCell().storeUint(merkleRoot, 256).endCell())
+          .endCell();
+
+      await provider.internal(via, {
+          sendMode: SendMode.PAY_GAS_SEPARATELY,
+          body: messsage,
+          value: toNano('0.1'),
+      });
+  }
+
+  async sendClaimStorageRewards(
+    provider: ContractProvider, via: Sender
+  ) {
+      const messsage = beginCell()
+          .storeUint(op_claim_storage_rewards, 32) // op
+          .storeUint(0, 64) // queryId
           .endCell();
 
       await provider.internal(via, {

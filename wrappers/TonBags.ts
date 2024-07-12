@@ -1,5 +1,5 @@
 import {
-    Address, beginCell, Cell, Contract, Dictionary, contractAddress, ContractProvider, Sender, SendMode, toNano
+    Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode, toNano
 } from '@ton/core';
 
 import { op_update_admin, op_place_storage_order } from './constants';
@@ -19,14 +19,12 @@ export function tonBagsContentToCell(content: TonBagsContent) {
 export type TonBagsConfig = {
     adminAddress: Address;
     storageContractCode: Cell;
-    bagStorageContractDict: Dictionary<number, Address>;
 };
 
 export function tonBagsConfigToCell(config: TonBagsConfig): Cell {
     return beginCell()
         .storeAddress(config.adminAddress)
         .storeRef(config.storageContractCode)
-        .storeDict(config.bagStorageContractDict)
         .endCell();
 }
 
@@ -102,12 +100,20 @@ export class TonBags implements Contract {
         return result.stack.readAddress();
     }
 
-    async getStorageContractAddress(provider: ContractProvider, torrentHash: bigint) {
+    async getStorageContractAddress(
+        provider: ContractProvider, 
+        storageContractCode: Cell, ownerAddress: Address,
+        torrentHash: bigint, fileSize: bigint, merkleHash: bigint, initialStorageFee: bigint
+    ) {
         const result = await provider.get('get_storage_contract_address', [
-            { type: 'int', value: torrentHash },
-            // { type: 'slice', cell: beginCell().storeUint(torrentHash, 256).endCell() }
+            {type: 'cell', cell: storageContractCode},
+            {type: 'slice', cell: beginCell().storeAddress(ownerAddress).endCell()},
+            {type: 'int', value: torrentHash},
+            {type: 'int', value: fileSize},
+            {type: 'int', value: merkleHash},
+            {type: 'int', value: initialStorageFee}
         ]);
-        return result.stack.readAddressOpt();
+        return result.stack.readAddress();
     }
 
 }

@@ -25,8 +25,6 @@ describe('TonBags', () => {
     let Eva: SandboxContract<TreasuryContract>;
     let tonBags: SandboxContract<TonBags>;
 
-    let emptyBagStorageContractDict: Dictionary<number, Address>;
-
     beforeAll(async () => {
         tonBagsCode = await compile('TonBags');
         storageContractCode = await compile('StorageContract');
@@ -37,14 +35,12 @@ describe('TonBags', () => {
         Caro = await blockchain.treasury('Caro');
         Dave = await blockchain.treasury('Dave');
         Eva = await blockchain.treasury('Eva');
-        emptyBagStorageContractDict = Dictionary.empty();
 
         tonBags = blockchain.openContract(
             TonBags.createFromConfig(
                 {
                     adminAddress: Alice.address,
-                    storageContractCode,
-                    bagStorageContractDict: emptyBagStorageContractDict,
+                    storageContractCode
                 },
                 tonBagsCode
             )
@@ -109,8 +105,6 @@ describe('TonBags', () => {
         const torrentHash = BigInt('0x476848C3350EA64ACCC09218917132998267F2ABC283097082FD41D511CAF11B');
         const fileSize = 1024n * 1024n * 10n;  // 10MB
 
-        expect(await tonBags.getStorageContractAddress(torrentHash)).toBeNull();
-
         let trans = await tonBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'));
         expect(trans.transactions).toHaveTransaction({
             from: Bob.address,
@@ -118,16 +112,14 @@ describe('TonBags', () => {
             success: true
         });
 
-        expect(await tonBags.getStorageContractAddress(torrentHash)).not.toBeNull();
-
-        trans = await tonBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'));
-        expect(trans.transactions).toHaveTransaction({
-            from: Caro.address,
-            to: tonBags.address,
-            aborted: true,
-            exitCode: error_duplicated_torrent_hash,
-            success: false
-        });
+        // trans = await tonBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'));
+        // expect(trans.transactions).toHaveTransaction({
+        //     from: Caro.address,
+        //     to: tonBags.address,
+        //     aborted: true,
+        //     exitCode: error_duplicated_torrent_hash,
+        //     success: false
+        // });
 
         const torrentHash2 = BigInt('0x476848C3350EA64ACCC09218917132998267F2ABC283097082FD41D511CAF11C');
         trans = await tonBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash2, fileSize, merkleRoot, toNano('1'));
@@ -136,8 +128,6 @@ describe('TonBags', () => {
             to: tonBags.address,
             success: true
         });
-        expect(await tonBags.getStorageContractAddress(torrentHash2)).not.toBeNull();
-        expect(await tonBags.getStorageContractAddress(torrentHash)).not.toEqual(await tonBags.getStorageContractAddress(torrentHash2));
 
         const torrentHash3 = BigInt('0x476848C3350EA64ACCC09218917132998267F2ABC283097082FD41D511CAF11D');
         trans = await tonBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash3, 0n, merkleRoot, toNano('1'));
@@ -183,18 +173,18 @@ describe('TonBags', () => {
         // 1 hour rewards: 0.24 / 24 = 0.01
         const totalStorageFee = toNano('43.2');
 
-        expect(await tonBags.getStorageContractAddress(torrentHash)).toBeNull();
         let trans = await tonBags.sendPlaceStorageOrder(Dave.getSender(), torrentHash, fileSize, merkleRoot, totalStorageFee);
         expect(trans.transactions).toHaveTransaction({
             from: Dave.address,
             to: tonBags.address,
             success: true
         });
-        expect(await tonBags.getStorageContractAddress(torrentHash)).not.toBeNull();
+        const calStorageContractAddress = await tonBags.getStorageContractAddress(storageContractCode, Dave.address, torrentHash, fileSize, merkleRoot, totalStorageFee);
+        // expect(await tonBags.getStorageContractAddress(torrentHash)).not.toBeNull();
 
         const storageContract = blockchain.openContract(
             StorageContract.createFromAddress(
-                await tonBags.getStorageContractAddress(torrentHash) || Alice.address
+                calStorageContractAddress
             )
         );
 

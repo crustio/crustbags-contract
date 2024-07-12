@@ -20,11 +20,11 @@
     var storage_provider_next_proofs = storage_providers_info~load_dict();
 
     var rewards_settlement_info = ds~load_ref().begin_parse();
-    var total_rewards_settled_and_unclaimed_for_providers = rewards_settlement_info~load_dict();
-    var per_sec_total_rewards_settled_for_providers = rewards_settlement_info~load_dict();
+    var total_rewards_settled_and_unclaimed_for_providers_scaled = rewards_settlement_info~load_dict();
+    var per_sec_total_rewards_settled_for_providers_scaled = rewards_settlement_info~load_dict();
 
     return (
-        bag_info, rewards_params, storage_providers, storage_provider_last_proof_times, storage_provider_last_proof_valid, storage_provider_next_proofs, total_rewards_settled_and_unclaimed_for_providers, per_sec_total_rewards_settled_for_providers
+        bag_info, rewards_params, storage_providers, storage_provider_last_proof_times, storage_provider_last_proof_valid, storage_provider_next_proofs, total_rewards_settled_and_unclaimed_for_providers_scaled, per_sec_total_rewards_settled_for_providers_scaled
     );
 }
 
@@ -47,22 +47,22 @@
 
     ds = rewards_params.begin_parse();
     var (
-        started, total_storage_providers, total_rewards, total_rewards_per_sec, undistributed_rewards,
-        per_sec_per_provider_total_rewards_settled, period_finish, last_settle_time
+        started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
+        per_sec_per_provider_total_rewards_settled_scaled, period_finish, last_settle_time
     ) = (
         ds~load_uint(1), ds~load_uint(32), ds~load_coins(), ds~load_coins(), ds~load_coins(),
         ds~load_coins(), ds~load_uint(32), ds~load_uint(32)
     );
 
     return (
-        started, total_storage_providers, total_rewards, total_rewards_per_sec, undistributed_rewards,
-        per_sec_per_provider_total_rewards_settled, period_finish, last_settle_time
+        started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
+        per_sec_per_provider_total_rewards_settled_scaled, period_finish, last_settle_time
     );
 }
 
 () save_rewards_params(
-    started, total_storage_providers, total_rewards, total_rewards_per_sec, undistributed_rewards,
-    per_sec_per_provider_total_rewards_settled, period_finish, last_settle_time
+    started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
+    per_sec_per_provider_total_rewards_settled_scaled, period_finish, last_settle_time
 ) impure {
     var ds = get_data().begin_parse();
     var (
@@ -74,9 +74,9 @@
         .store_uint(started, 1)
         .store_uint(total_storage_providers, 32)
         .store_coins(total_rewards)
-        .store_coins(total_rewards_per_sec)
-        .store_coins(undistributed_rewards)
-        .store_coins(per_sec_per_provider_total_rewards_settled)
+        .store_coins(total_rewards_per_sec_scaled)
+        .store_coins(undistributed_rewards_scaled)
+        .store_coins(per_sec_per_provider_total_rewards_settled_scaled)
         .store_uint(period_finish, 32)
         .store_uint(last_settle_time, 32)
         .end_cell();
@@ -291,14 +291,14 @@ cell load_total_rewards_settled_and_unclaimed_for_providers() inline {
     
     ds = rewards_settlement_info.begin_parse();
     var (
-        total_rewards_settled_and_unclaimed_for_providers, residue
+        total_rewards_settled_and_unclaimed_for_providers_scaled, residue
     ) = (
         ds~load_dict(), ds
     );
-    return total_rewards_settled_and_unclaimed_for_providers;
+    return total_rewards_settled_and_unclaimed_for_providers_scaled;
 }
 
-() save_total_rewards_settled_and_unclaimed_for_providers(cell total_rewards_settled_and_unclaimed_for_providers) impure inline {
+() save_total_rewards_settled_and_unclaimed_for_providers(cell total_rewards_settled_and_unclaimed_for_providers_scaled) impure inline {
     var ds = get_data().begin_parse();
     var (
         bag_info, rewards_params, storage_providers_info, rewards_settlement_info
@@ -308,14 +308,14 @@ cell load_total_rewards_settled_and_unclaimed_for_providers() inline {
 
     ds = rewards_settlement_info.begin_parse();
     var (
-        _, per_sec_total_rewards_settled_for_providers
+        _, per_sec_total_rewards_settled_for_providers_scaled
     ) = (
         ds~load_dict(), ds~load_dict()
     );
     
     rewards_settlement_info = begin_cell()
-        .store_dict(total_rewards_settled_and_unclaimed_for_providers)
-        .store_dict(per_sec_total_rewards_settled_for_providers)
+        .store_dict(total_rewards_settled_and_unclaimed_for_providers_scaled)
+        .store_dict(per_sec_total_rewards_settled_for_providers_scaled)
         .end_cell();
 
     set_data(
@@ -338,14 +338,14 @@ cell load_per_sec_total_rewards_settled_for_providers() inline {
 
     ds = rewards_settlement_info.begin_parse();
     var (
-        total_rewards_settled_and_unclaimed_for_providers, per_sec_total_rewards_settled_for_providers
+        total_rewards_settled_and_unclaimed_for_providers_scaled, per_sec_total_rewards_settled_for_providers_scaled
     ) = (
         ds~load_dict(), ds~load_dict()
     );
-    return per_sec_total_rewards_settled_for_providers;
+    return per_sec_total_rewards_settled_for_providers_scaled;
 }
 
-() save_per_sec_total_rewards_settled_for_providers(cell per_sec_total_rewards_settled_for_providers) impure inline {
+() save_per_sec_total_rewards_settled_for_providers(cell per_sec_total_rewards_settled_for_providers_scaled) impure inline {
     var ds = get_data().begin_parse();
     var (
         bag_info, rewards_params, storage_providers_info, rewards_settlement_info
@@ -355,14 +355,14 @@ cell load_per_sec_total_rewards_settled_for_providers() inline {
 
     ds = rewards_settlement_info.begin_parse();
     var (
-        total_rewards_settled_and_unclaimed_for_providers, _
+        total_rewards_settled_and_unclaimed_for_providers_scaled, _
     ) = (
         ds~load_dict(), ds~load_dict()
     );
     
     rewards_settlement_info = begin_cell()
-        .store_dict(total_rewards_settled_and_unclaimed_for_providers)
-        .store_dict(per_sec_total_rewards_settled_for_providers)
+        .store_dict(total_rewards_settled_and_unclaimed_for_providers_scaled)
+        .store_dict(per_sec_total_rewards_settled_for_providers_scaled)
         .end_cell();
 
     set_data(
@@ -377,31 +377,31 @@ cell load_per_sec_total_rewards_settled_for_providers() inline {
 
 int load_total_storage_providers() inline {
     var (
-        started, total_storage_providers, total_rewards, total_rewards_per_sec, undistributed_rewards,
-        per_sec_per_provider_total_rewards_settled, period_finish, last_settle_time
+        started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
+        per_sec_per_provider_total_rewards_settled_scaled, period_finish, last_settle_time
     ) = load_rewards_params();
     return total_storage_providers;
 }
 
 int settle_time_applicable() inline {
     var (
-        started, total_storage_providers, total_rewards, total_rewards_per_sec, undistributed_rewards,
-        per_sec_per_provider_total_rewards_settled, period_finish, last_settle_time
+        started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
+        per_sec_per_provider_total_rewards_settled_scaled, period_finish, last_settle_time
     ) = load_rewards_params();
     return (now() <= period_finish) ? now() : period_finish;
 }
 
 int per_sec_per_provider_total_rewards_till_now() inline {
     var (
-        started, total_storage_providers, total_rewards, total_rewards_per_sec, undistributed_rewards,
-        per_sec_per_provider_total_rewards_settled, period_finish, last_settle_time
+        started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
+        per_sec_per_provider_total_rewards_settled_scaled, period_finish, last_settle_time
     ) = load_rewards_params();
     if (total_storage_providers == 0) {
-        return per_sec_per_provider_total_rewards_settled;
+        return per_sec_per_provider_total_rewards_settled_scaled;
     }
     else {
-        var rewards = per_sec_per_provider_total_rewards_settled + (
-            (settle_time_applicable() - last_settle_time) * total_rewards_per_sec * (10 ^ 18) / total_storage_providers / (10 ^ 18)
+        var rewards = per_sec_per_provider_total_rewards_settled_scaled + (
+            (settle_time_applicable() - last_settle_time) * total_rewards_per_sec_scaled * (10 ^ 18) / total_storage_providers / (10 ^ 18)
         );
         return rewards;
     }
@@ -422,31 +422,31 @@ int per_sec_total_rewards_pending_settle_for_provider(slice provider_address) in
 () do_settle_rewards(slice provider_address, int new_worker, int settle_new_rewards) impure {
     (int wc, int provider_addr) = parse_std_addr(provider_address);
 
-    var per_sec_per_provider_total_rewards_settled = per_sec_per_provider_total_rewards_till_now();
+    var per_sec_per_provider_total_rewards_settled_scaled = per_sec_per_provider_total_rewards_till_now();
     var last_settle_time = settle_time_applicable();
     if (new_worker) {
-        var total_rewards_settled_and_unclaimed_for_providers = load_total_rewards_settled_and_unclaimed_for_providers();
-        total_rewards_settled_and_unclaimed_for_providers~udict_set_ref(256, provider_addr, begin_cell().store_coins(0).end_cell());
-        save_total_rewards_settled_and_unclaimed_for_providers(total_rewards_settled_and_unclaimed_for_providers);
+        var total_rewards_settled_and_unclaimed_for_providers_scaled = load_total_rewards_settled_and_unclaimed_for_providers();
+        total_rewards_settled_and_unclaimed_for_providers_scaled~udict_set_ref(256, provider_addr, begin_cell().store_coins(0).end_cell());
+        save_total_rewards_settled_and_unclaimed_for_providers(total_rewards_settled_and_unclaimed_for_providers_scaled);
     }
     if (settle_new_rewards) {
         var pending_settled = per_sec_total_rewards_pending_settle_for_provider(provider_address);
 
-        var total_rewards_settled_and_unclaimed_for_providers = load_total_rewards_settled_and_unclaimed_for_providers();
-        var (earned, success?) = total_rewards_settled_and_unclaimed_for_providers.udict_get_ref?(256, provider_addr);
+        var total_rewards_settled_and_unclaimed_for_providers_scaled = load_total_rewards_settled_and_unclaimed_for_providers();
+        var (earned, success?) = total_rewards_settled_and_unclaimed_for_providers_scaled.udict_get_ref?(256, provider_addr);
         
         if (success?) {
             var ds = earned.begin_parse();
             pending_settled = pending_settled + ds~load_coins();
         }
-        total_rewards_settled_and_unclaimed_for_providers~udict_set_ref(256, provider_addr, begin_cell().store_coins(pending_settled).end_cell());
+        total_rewards_settled_and_unclaimed_for_providers_scaled~udict_set_ref(256, provider_addr, begin_cell().store_coins(pending_settled).end_cell());
 
-        save_total_rewards_settled_and_unclaimed_for_providers(total_rewards_settled_and_unclaimed_for_providers);
+        save_total_rewards_settled_and_unclaimed_for_providers(total_rewards_settled_and_unclaimed_for_providers_scaled);
     }
 
-    var per_sec_total_rewards_settled_for_providers = load_per_sec_total_rewards_settled_for_providers();
-    per_sec_total_rewards_settled_for_providers~udict_set_ref(256, provider_addr, begin_cell().store_coins(per_sec_per_provider_total_rewards_settled).end_cell());
-    save_per_sec_total_rewards_settled_for_providers(per_sec_total_rewards_settled_for_providers);
+    var per_sec_total_rewards_settled_for_providers_scaled = load_per_sec_total_rewards_settled_for_providers();
+    per_sec_total_rewards_settled_for_providers_scaled~udict_set_ref(256, provider_addr, begin_cell().store_coins(per_sec_per_provider_total_rewards_settled_scaled).end_cell());
+    save_per_sec_total_rewards_settled_for_providers(per_sec_total_rewards_settled_for_providers_scaled);
 }
 
 () register_as_provider(slice provider_address) impure {
@@ -461,20 +461,20 @@ int per_sec_total_rewards_pending_settle_for_provider(slice provider_address) in
 
     var first_worker = storage_providers_dict.dict_empty?();
     var (
-        started, total_storage_providers, total_rewards, total_rewards_per_sec, undistributed_rewards,
-        per_sec_per_provider_total_rewards_settled, period_finish, last_settle_time
+        started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
+        per_sec_per_provider_total_rewards_settled_scaled, period_finish, last_settle_time
     ) = load_rewards_params();
     if (~ started & first_worker) {
         started = 1;
-        total_rewards_per_sec = total_rewards / default_storage_period;
+        total_rewards_per_sec_scaled = total_rewards * (10 ^ 18) / default_storage_period;
         last_settle_time = now();
         period_finish = now() + default_storage_period;
     }
 
     total_storage_providers += 1;
     save_rewards_params(
-        started, total_storage_providers, total_rewards, total_rewards_per_sec, undistributed_rewards,
-        per_sec_per_provider_total_rewards_settled, period_finish, last_settle_time
+        started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
+        per_sec_per_provider_total_rewards_settled_scaled, period_finish, last_settle_time
     );
 
     storage_providers_dict~udict_set_ref(256, provider_addr, begin_cell().store_uint(1, 1).end_cell());
@@ -503,14 +503,14 @@ int per_sec_total_rewards_pending_settle_for_provider(slice provider_address) in
 
     var pending_rewards = per_sec_total_rewards_pending_settle_for_provider(provider_address);
     var (
-        started, total_storage_providers, total_rewards, total_rewards_per_sec, undistributed_rewards,
-        per_sec_per_provider_total_rewards_settled, period_finish, last_settle_time
+        started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
+        per_sec_per_provider_total_rewards_settled_scaled, period_finish, last_settle_time
     ) = load_rewards_params();
     total_storage_providers -= 1;
-    undistributed_rewards += pending_rewards;
+    undistributed_rewards_scaled += pending_rewards;
     save_rewards_params(
-        started, total_storage_providers, total_rewards, total_rewards_per_sec, undistributed_rewards,
-        per_sec_per_provider_total_rewards_settled, period_finish, last_settle_time
+        started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
+        per_sec_per_provider_total_rewards_settled_scaled, period_finish, last_settle_time
     );
 
     do_settle_rewards(provider_address, 0, 1);
@@ -527,11 +527,11 @@ int per_sec_total_rewards_pending_settle_for_provider(slice provider_address) in
     (int wc, int provider_addr) = parse_std_addr(provider_address);
     do_settle_rewards(provider_address, 0, 0);
 
-    var total_rewards_settled_and_unclaimed_for_providers = load_total_rewards_settled_and_unclaimed_for_providers();
-    var (earned, success?) = total_rewards_settled_and_unclaimed_for_providers.udict_get_ref?(256, provider_addr);
+    var total_rewards_settled_and_unclaimed_for_providers_scaled = load_total_rewards_settled_and_unclaimed_for_providers();
+    var (earned, success?) = total_rewards_settled_and_unclaimed_for_providers_scaled.udict_get_ref?(256, provider_addr);
     if (success?) {
-        total_rewards_settled_and_unclaimed_for_providers~udict_set_ref(256, provider_addr, begin_cell().store_coins(0).end_cell());
-        save_total_rewards_settled_and_unclaimed_for_providers(total_rewards_settled_and_unclaimed_for_providers);
+        total_rewards_settled_and_unclaimed_for_providers_scaled~udict_set_ref(256, provider_addr, begin_cell().store_coins(0).end_cell());
+        save_total_rewards_settled_and_unclaimed_for_providers(total_rewards_settled_and_unclaimed_for_providers_scaled);
         var ds = earned.begin_parse();
         cell msg = begin_cell()
             .store_uint(0x18, 6)
@@ -551,25 +551,25 @@ int per_sec_total_rewards_pending_settle_for_provider(slice provider_address) in
     throw_unless(error::unauthorized, equal_slice_bits(caller_address, owner_address));
 
     var (
-        started, total_storage_providers, total_rewards, total_rewards_per_sec, undistributed_rewards,
-        per_sec_per_provider_total_rewards_settled, period_finish, last_settle_time
+        started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
+        per_sec_per_provider_total_rewards_settled_scaled, period_finish, last_settle_time
     ) = load_rewards_params();
     throw_unless(error::storage_order_unexpired, (period_finish > 0) & (now() > period_finish));
 
-    if (undistributed_rewards > 0) {
+    if (undistributed_rewards_scaled > 0) {
         cell msg = begin_cell()
             .store_uint(0x18, 6)
             .store_slice(to_address)
-            .store_coins(undistributed_rewards)
+            .store_coins(undistributed_rewards_scaled / (10 ^ 18))
             .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
             .store_uint(0, 32) ;; zero opcode
             .end_cell();
         send_raw_message(msg, 3);
 
-        undistributed_rewards = 0;
+        undistributed_rewards_scaled = 0;
         save_rewards_params(
-            started, total_storage_providers, total_rewards, total_rewards_per_sec, undistributed_rewards,
-            per_sec_per_provider_total_rewards_settled, period_finish, last_settle_time
+            started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
+            per_sec_per_provider_total_rewards_settled_scaled, period_finish, last_settle_time
         );
     }
 }
@@ -607,13 +607,13 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, cell file_dic
     var in_report_window = (now() - last_work_report_time) <= max_storage_proof_span;
     if (~ in_report_window) {
         var (
-            started, total_storage_providers, total_rewards, total_rewards_per_sec, undistributed_rewards,
-            per_sec_per_provider_total_rewards_settled, period_finish, last_settle_time
+            started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
+            per_sec_per_provider_total_rewards_settled_scaled, period_finish, last_settle_time
         ) = load_rewards_params();
-        undistributed_rewards += per_sec_total_rewards_pending_settle_for_provider(provider_address);
+        undistributed_rewards_scaled += per_sec_total_rewards_pending_settle_for_provider(provider_address);
         save_rewards_params(
-            started, total_storage_providers, total_rewards, total_rewards_per_sec, undistributed_rewards,
-            per_sec_per_provider_total_rewards_settled, period_finish, last_settle_time
+            started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
+            per_sec_per_provider_total_rewards_settled_scaled, period_finish, last_settle_time
         );
     }
 
@@ -705,38 +705,46 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, cell file_dic
 
 int started() method_id {
     var (
-        started, total_storage_providers, total_rewards, total_rewards_per_sec, undistributed_rewards,
-        per_sec_per_provider_total_rewards_settled, period_finish, last_settle_time
+        started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
+        per_sec_per_provider_total_rewards_settled_scaled, period_finish, last_settle_time
     ) = load_rewards_params();
     return started;
 }
 
 int get_period_finish() method_id {
     var (
-        started, total_storage_providers, total_rewards, total_rewards_per_sec, undistributed_rewards,
-        per_sec_per_provider_total_rewards_settled, period_finish, last_settle_time
+        started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
+        per_sec_per_provider_total_rewards_settled_scaled, period_finish, last_settle_time
     ) = load_rewards_params();
     return period_finish;
 }
 
 int get_total_storage_providers() method_id {
     var (
-        started, total_storage_providers, total_rewards, total_rewards_per_sec, undistributed_rewards,
-        per_sec_per_provider_total_rewards_settled, period_finish, last_settle_time
+        started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
+        per_sec_per_provider_total_rewards_settled_scaled, period_finish, last_settle_time
     ) = load_rewards_params();
     return total_storage_providers;
 }
 
 int earned(slice provider_address) method_id {
     (int wc, int provider_addr) = parse_std_addr(provider_address);
-    var total_rewards_settled_and_unclaimed_for_providers = load_total_rewards_settled_and_unclaimed_for_providers();
+    var total_rewards_settled_and_unclaimed_for_providers_scaled = load_total_rewards_settled_and_unclaimed_for_providers();
 
-    var (val, found?) = total_rewards_settled_and_unclaimed_for_providers.udict_get_ref?(256, provider_addr);
+    var (val, found?) = total_rewards_settled_and_unclaimed_for_providers_scaled.udict_get_ref?(256, provider_addr);
     if (found?) {
         var ds = val.begin_parse();
-        return ds~load_coins();
+        return ds~load_coins() / (10 ^ 18);
     }
     return 0;
+}
+
+int get_undistributed_rewards() method_id {
+    var (
+        started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
+        per_sec_per_provider_total_rewards_settled_scaled, period_finish, last_settle_time
+    ) = load_rewards_params();
+    return undistributed_rewards_scaled / (10 ^ 18);
 }
 
 int get_last_proof_valid(slice provider_address) method_id {

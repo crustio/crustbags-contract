@@ -21,7 +21,7 @@ cell build_storage_contract_stateinit(
             .store_uint(file_size_in_bytes, 64)
             .end_cell();
     
-    ;; started, total_storage_providers, total_rewards, total_rewards_per_sec, undistributed_rewards,
+    ;; started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards,
     ;;    per_sec_per_provider_total_rewards_settled, period_finish, last_settle_time
     cell rewards_params = begin_cell()
             .store_uint(0, 1)

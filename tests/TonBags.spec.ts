@@ -178,13 +178,15 @@ describe('TonBags', () => {
         const someInvalidMerkleRoot = merkleRoot - 1n;
         const torrentHash = BigInt('0x676848C3350EA64ACCC09218917132998267F2ABC283097082FD41D511CAF11B');
         const fileSize = 1024n * 1024n * 10n;  // 10MB
-        // Distribute 18 $TON over 180 days. Workers must submit their report at most every 1 hour
-        const totalStorageFee = toNano('18');
+        // Distribute 43.2 $TON over 180 days. Workers must submit their report at most every 1 hour
+        // 1 day rewards: 43.2 / 180 = 0.24 $TON
+        // 1 hour rewards: 0.24 / 24 = 0.01
+        const totalStorageFee = toNano('43.2');
 
         expect(await tonBags.getStorageContractAddress(torrentHash)).toBeNull();
-        let trans = await tonBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, totalStorageFee);
+        let trans = await tonBags.sendPlaceStorageOrder(Dave.getSender(), torrentHash, fileSize, merkleRoot, totalStorageFee);
         expect(trans.transactions).toHaveTransaction({
-            from: Bob.address,
+            from: Dave.address,
             to: tonBags.address,
             success: true
         });
@@ -198,10 +200,10 @@ describe('TonBags', () => {
 
         let [contractTorrentHash, ownerAddress, fileMerkleHash, fileSizeInBytes] = await storageContract.getBagInfo();
         expect(contractTorrentHash).toEqual(torrentHash);
-        expect(ownerAddress).toEqualAddress(Bob.address);
+        expect(ownerAddress).toEqualAddress(Dave.address);
         expect(fileMerkleHash).toEqual(merkleRoot);
         expect(fileSizeInBytes).toEqual(fileSize);
-        expect(await storageContract.getEarned(Bob.address)).toEqual(0n);
+        expect(await storageContract.getEarned(Alice.address)).toEqual(0n);
 
         console.log(fromNano(await tonBags.getBalance()));
         console.log(fromNano(await storageContract.getBalance()));
@@ -218,9 +220,9 @@ describe('TonBags', () => {
         expect(await storageContract.getPeriodFinish()).toEqual(0n);
 
         // Can't recycle pool before start or finish
-        trans = await storageContract.sendRecycleUndistributedStorageFees(Bob.getSender(), Bob.address);
+        trans = await storageContract.sendRecycleUndistributedStorageFees(Dave.getSender(), Bob.address);
         expect(trans.transactions).toHaveTransaction({
-            from: Bob.address,
+            from: Dave.address,
             to: storageContract.address,
             aborted: true,
             exitCode: error_storage_order_unexpired,
@@ -228,30 +230,33 @@ describe('TonBags', () => {
         });
 
         // Storage providers can't exit or submit work report before register
-        trans = await storageContract.sendUnregisterAsStorageProvider(Bob.getSender());
+        trans = await storageContract.sendUnregisterAsStorageProvider(Alice.getSender());
         expect(trans.transactions).toHaveTransaction({
-            from: Bob.address,
+            from: Alice.address,
             to: storageContract.address,
             aborted: true,
             exitCode: error_unregistered_storage_provider,
             success: false
         });
-        expect(await storageContract.getNextProof(Bob.address)).toEqual(-1n);
-        trans = await storageContract.sendSubmitStorageProof(Bob.getSender(), merkleRoot);
+        expect(await storageContract.getNextProof(Alice.address)).toEqual(-1n);
+        trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), merkleRoot);
         expect(trans.transactions).toHaveTransaction({
-            from: Bob.address,
+            from: Alice.address,
             to: storageContract.address,
             aborted: true,
             exitCode: error_unregistered_storage_provider,
             success: false
         });
 
-        // Day 0: Caro regisers as a worker
+        // Day 0: Alice registers as a worker
+        // Alice Timeline: 
+        //       Genesis Time (Joined)
         const genesisTime = Math.floor(Date.now() / 1000);
         blockchain.now = genesisTime;
-        trans = await storageContract.sendRegisterAsStorageProvider(Caro.getSender());
+        console.log(`Hour 0: Alice registers as a storage provider`);
+        trans = await storageContract.sendRegisterAsStorageProvider(Alice.getSender());
         expect(trans.transactions).toHaveTransaction({
-            from: Caro.address,
+            from: Alice.address,
             to: storageContract.address,
             op: op_register_as_storage_provider,
             success: true
@@ -261,24 +266,139 @@ describe('TonBags', () => {
         expect(await storageContract.getTotalStorageProviders()).toEqual(1n);
 
         // Total rewards: 0.1 $TON per day
-        let totalRewardsPerHour = toNano('0.1') / 24n;
+        // Alice Timeline: 
+        //       Genesis Time (Joined)
+        //       + 1 hour (Submit valid report => 1 hour rewards => claimed) 
+        let totalRewardsPerHour = totalStorageFee / 180n / 24n;
+        console.log("totalRewardsPerHour: ", totalRewardsPerHour);
+        console.log(`Hour 1: Alice submits a valid report`);
         blockchain.now += ONE_HOUR_IN_SECS - 1;
-        trans = await storageContract.sendSubmitStorageProof(Caro.getSender(), merkleRoot);
+        trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), merkleRoot);
         expect(trans.transactions).toHaveTransaction({
-            from: Caro.address,
+            from: Alice.address,
             to: storageContract.address,
             op: op_submit_storage_proof,
             success: true
         });
-        console.log(await storageContract.getEarned(Caro.address), totalRewardsPerHour);
-        expectBigNumberEquals(await storageContract.getEarned(Caro.address), totalRewardsPerHour);
-        trans = await storageContract.sendClaimStorageRewards(Caro.getSender());
+        // console.log(await storageContract.getEarned(Alice.address), totalRewardsPerHour);
+        console.log(`Hour 1: Alice claims rewards`);
+        expectBigNumberEquals(await storageContract.getEarned(Alice.address), totalRewardsPerHour);
+        trans = await storageContract.sendClaimStorageRewards(Alice.getSender());
         expect(trans.transactions).toHaveTransaction({
-            from: Caro.address,
+            from: Alice.address,
             to: storageContract.address,
             op: op_claim_storage_rewards,
             success: true
         });
+
+        // After 1.5 hour, Alice submit another valid report. And earns nothing
+        // Alice Timeline: 
+        //       Genesis Time (Joined)
+        //       + 1 hour (Submit valid report => 1 hour rewards) 
+        //       + 1.5 hour (Submit valid report => ignored due to timeout => 1.5 hours rewards undistributed )
+        console.log(`Hour 2.5: Alice submits a valid report. Should be ignored due to timeout`);
+        blockchain.now += ONE_HOUR_IN_SECS * 3 / 2;
+        trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), merkleRoot);
+        expect(trans.transactions).toHaveTransaction({
+            from: Alice.address,
+            to: storageContract.address,
+            op: op_submit_storage_proof,
+            success: true
+        });
+        expect(await storageContract.getEarned(Alice.address)).toEqual(0n);
+        // console.log(await storageContract.getUndistributedRewards(), totalRewardsPerHour * 3n / 2n);
+        expectBigNumberEquals(await storageContract.getUndistributedRewards(), totalRewardsPerHour * 3n / 2n);
+
+        // After 0.5 hour, Alice submit another valid report, should earn 0.5 hour rewards
+        // Alice Timeline: 
+        //       Genesis Time (Joined)
+        //       + 1 hour (Submit valid report => 1 hour rewards) 
+        //       + 1.5 hour (Submit valid report => ignored due to timeout => 1.5 hours rewards undistributed )
+        //       + 0.5 hour (Submit valid report => 0.5 hours rewards)
+        console.log(`Hour 3.0: Alice submits a valid report, should earn 0.5 hour rewards`);
+        blockchain.now += ONE_HOUR_IN_SECS / 2 - 1;
+        let lastTime = blockchain.now;
+        trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), merkleRoot);
+        expect(trans.transactions).toHaveTransaction({
+            from: Alice.address,
+            to: storageContract.address,
+            op: op_submit_storage_proof,
+            success: true
+        });
+        expect(await storageContract.getLastProofValid(Alice.address)).not.toBeFalsy();
+        expectBigNumberEquals(await storageContract.getEarned(Alice.address), totalRewardsPerHour / 2n);
+
+        // Bob register as a storage provider
+        // Bob Timeline: 
+        //       Genesis Time
+        //       + 1 hour
+        //       + 1.5 hour
+        //       + 0.5 hour (Joined)
+        console.log(`Hour 3.0: Bob registers as a storage provider`);
+        trans = await storageContract.sendRegisterAsStorageProvider(Bob.getSender());
+        expect(trans.transactions).toHaveTransaction({
+            from: Bob.address,
+            to: storageContract.address,
+            op: op_register_as_storage_provider,
+            success: true
+        });
+        expect(await storageContract.getTotalStorageProviders()).toEqual(2n);
+
+        // 0.5 hour later, Alice submit an invlid report, which should be ignored
+        // Alice Timeline: 
+        //       Genesis Time (Joined)
+        //       + 1 hour (Submit valid report => 1 hour rewards) 
+        //       + 1.5 hour (Submit valid report => ignored due to timeout => 1.5 hours rewards undistributed )
+        //       + 0.5 hour (Submit valid report => 0.5 hours rewards)
+        //       + 0.5 hour (Submit invalid report => ignored)
+        console.log(`Hour 3.5: Alice submits a valid report`);
+        blockchain.now += ONE_HOUR_IN_SECS / 2;
+        trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), someInvalidMerkleRoot);
+        expect(trans.transactions).toHaveTransaction({
+            from: Alice.address,
+            to: storageContract.address,
+            op: op_submit_storage_proof,
+            success: true
+        });
+        expect(await storageContract.getLastProofValid(Alice.address)).toBeFalsy();
+
+        // 0.5 hour later, both Alice and Bob submit valid reports
+        // Alice Timeline: 
+        //       Genesis Time (Joined)
+        //       + 1 hour (Submit valid report => 1 hour rewards) 
+        //       + 1.5 hour (Submit valid report => ignored due to timeout => 1.5 hours rewards undistributed )
+        //       + 0.5 hour (Submit valid report => 0.5 hours rewards)
+        //       + 0.5 hour (Submit invalid report => ignored)
+        //       + 0.5 hour (Submit valid report => another 1 hours rewards / 2)
+        // Bob Timeline: 
+        //       Genesis Time
+        //       + 1 hour
+        //       + 1.5 hour
+        //       + 0.5 hour (Joined)
+        //       + 0.5 hour
+        //       + 0.5 hour (Submit valid report => 1 hours rewards / 2)
+        blockchain.now = lastTime + ONE_HOUR_IN_SECS - 1;
+        lastTime = blockchain.now;
+        trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), merkleRoot);
+        expect(trans.transactions).toHaveTransaction({
+            from: Alice.address,
+            to: storageContract.address,
+            op: op_submit_storage_proof,
+            success: true
+        });
+        expect(await storageContract.getLastProofValid(Alice.address)).not.toBeFalsy();
+        trans = await storageContract.sendSubmitStorageProof(Bob.getSender(), merkleRoot);
+        expect(trans.transactions).toHaveTransaction({
+            from: Bob.address,
+            to: storageContract.address,
+            op: op_submit_storage_proof,
+            success: true
+        });
+        expect(await storageContract.getLastProofValid(Bob.address)).not.toBeFalsy();
+        expectBigNumberEquals(await storageContract.getEarned(Alice.address), totalRewardsPerHour / 2n + totalRewardsPerHour / 2n);
+        expectBigNumberEquals(await storageContract.getEarned(Bob.address), totalRewardsPerHour / 2n);
+
+        
 
 
 

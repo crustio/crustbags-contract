@@ -26,10 +26,10 @@ cell build_storage_contract_stateinit(
     cell rewards_params = begin_cell()
             .store_uint(0, 1)
             .store_uint(0, 32)
-            .store_coins(total_rewards)
-            .store_coins(0)
-            .store_coins(0)
-            .store_coins(0)
+            .store_uint(total_rewards, 192)
+            .store_uint(0, 192)
+            .store_uint(0, 192)
+            .store_uint(0, 192)
             .store_uint(0, 32)
             .store_uint(0, 32)
             .end_cell();
@@ -64,4 +64,22 @@ cell build_storage_contract_stateinit(
             .end_cell();
 
     return state_init;
+}
+
+;; https://docs.ton.org/develop/func/cookbook#how-to-convert-int-to-string
+slice int_to_string(int n) inline {
+    builder string = begin_cell();
+    tuple chars = null();
+    do {
+        int r = n~divmod(10);
+        chars = cons(r + 48, chars);
+    } until (n == 0);
+
+    do {
+        int char = chars~list_next();
+        string~store_uint(char, 8);
+    } until (null?(chars));
+
+    slice result = string.end_cell().begin_parse();
+    return result;
 }

@@ -76,11 +76,23 @@ export class StorageContract implements Contract {
     return result.stack.readBigNumber();
   }
 
+  async getUndistributedRewards(provider: ContractProvider) {
+    const result = await provider.get('get_undistributed_rewards', []);
+    return result.stack.readBigNumber();
+  }
+
   async getEarned(provider: ContractProvider, providerAddress: Address) {
       const result = await provider.get('earned', [
           { type: 'slice', cell: beginCell().storeAddress(providerAddress).endCell() },
       ]);
       return result.stack.readBigNumber();
+  }
+
+  async getLastProofValid(provider: ContractProvider, providerAddress: Address) {
+    const result = await provider.get('get_last_proof_valid', [
+        { type: 'slice', cell: beginCell().storeAddress(providerAddress).endCell() },
+    ]);
+    return result.stack.readBoolean();
   }
 
   async getNextProof(provider: ContractProvider, providerAddress: Address) {

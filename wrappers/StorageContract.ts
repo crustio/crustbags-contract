@@ -103,12 +103,11 @@ export class StorageContract implements Contract {
   }
 
   async sendRecycleUndistributedStorageFees(
-      provider: ContractProvider, via: Sender, toAddress: Address
+      provider: ContractProvider, via: Sender
   ) {
       const messsage = beginCell()
           .storeUint(op_recycle_undistributed_storage_fees, 32) // op
           .storeUint(0, 64) // queryId
-          .storeAddress(toAddress)
           .endCell();
 
       await provider.internal(via, {

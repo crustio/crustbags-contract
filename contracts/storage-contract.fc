@@ -569,18 +569,20 @@ int per_sec_total_rewards_pending_settle_for_provider(slice provider_address) in
         total_rewards_settled_and_unclaimed_for_providers_scaled~udict_set_ref(256, provider_addr, begin_cell().store_uint(0, 192).end_cell());
         save_total_rewards_settled_and_unclaimed_for_providers(total_rewards_settled_and_unclaimed_for_providers_scaled);
         var ds = earned.begin_parse();
+        var earned_coins = ds~load_uint(192) / SCALE;
         cell msg = begin_cell()
-            .store_uint(0x18, 6)
+            .store_msg_flag(msg_flag::non_bounceable)
             .store_slice(provider_address)
-            .store_coins(ds~load_uint(192) / (SCALE))
+            .store_coins(earned_coins)
             .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
             .store_uint(0, 32) ;; zero opcode
+            .store_slice("Storage Fees") 
             .end_cell();
-        send_raw_message(msg, 3);
+        send_raw_message(msg, CARRY_REMAINING_GAS);
     }
 }
 
-() recycle(slice caller_address, slice to_address) impure {
+() recycle(slice caller_address) impure {
     var (
         torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes
     ) = load_bag_info();
@@ -593,14 +595,17 @@ int per_sec_total_rewards_pending_settle_for_provider(slice provider_address) in
     throw_unless(error::storage_order_unexpired, (period_finish > 0) & (now() > period_finish));
 
     if (undistributed_rewards_scaled > 0) {
+        var coins = undistributed_rewards_scaled / SCALE;
+        ~dump([undistributed_rewards_scaled, coins]);
         cell msg = begin_cell()
-            .store_uint(0x18, 6)
-            .store_slice(to_address)
-            .store_coins(undistributed_rewards_scaled / (SCALE))
+            .store_msg_flag(msg_flag::non_bounceable)
+            .store_slice(owner_address)
+            .store_coins(coins)
             .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
             .store_uint(0, 32) ;; zero opcode
+            .store_slice("Recycle Fees")
             .end_cell();
-        send_raw_message(msg, 3);
+        send_raw_message(msg, CARRY_REMAINING_GAS);
 
         undistributed_rewards_scaled = 0;
         save_rewards_params(
@@ -727,8 +732,7 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, cell file_dic
     }
 
     if (op == op::recycle_undistributed_storage_fees) {
-        slice to_address = cs~load_msg_addr();
-        recycle(sender_address, to_address);
+        recycle(sender_address);
         return ();
     }
 

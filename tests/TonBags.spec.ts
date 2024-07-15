@@ -210,7 +210,7 @@ describe('TonBags', () => {
         expect(await storageContract.getPeriodFinish()).toEqual(0n);
 
         // Can't recycle pool before start or finish
-        trans = await storageContract.sendRecycleUndistributedStorageFees(Dave.getSender(), Bob.address);
+        trans = await storageContract.sendRecycleUndistributedStorageFees(Dave.getSender());
         expect(trans.transactions).toHaveTransaction({
             from: Dave.address,
             to: storageContract.address,
@@ -582,7 +582,7 @@ describe('TonBags', () => {
         expectBigNumberEquals(await storageContract.getEarned(Caro.address), exactRewardsOfCaro);
 
         // Now Dave could recylce the undistributed rewards
-        trans = await storageContract.sendRecycleUndistributedStorageFees(Alice.getSender(), Bob.address);
+        trans = await storageContract.sendRecycleUndistributedStorageFees(Alice.getSender());
         expect(trans.transactions).toHaveTransaction({
             from: Alice.address,
             to: storageContract.address,
@@ -590,7 +590,7 @@ describe('TonBags', () => {
             exitCode: error_unauthorized,
             success: false
         });
-        trans = await storageContract.sendRecycleUndistributedStorageFees(Dave.getSender(), Bob.address);
+        trans = await storageContract.sendRecycleUndistributedStorageFees(Dave.getSender());
         expect(trans.transactions).toHaveTransaction({
             from: Dave.address,
             to: storageContract.address,
@@ -606,6 +606,7 @@ describe('TonBags', () => {
             op: op_unregister_as_storage_provider,
             success: true
         });
+        console.log(`Before claim rewards. Contract balance: ${fromNano(await storageContract.getBalance())}, Caro balance: ${fromNano(await Caro.getBalance())}, Caro rewards: ${fromNano(await storageContract.getEarned(Caro.address))}`);
         trans = await storageContract.sendClaimStorageRewards(Caro.getSender());
         expect(trans.transactions).toHaveTransaction({
             from: Caro.address,
@@ -613,11 +614,23 @@ describe('TonBags', () => {
             op: op_claim_storage_rewards,
             success: true
         });
+        console.log(`After claim rewards. Contract balance: ${fromNano(await storageContract.getBalance())}, Caro balance: ${fromNano(await Caro.getBalance())}, Caro rewards: ${fromNano(await storageContract.getEarned(Caro.address))}`);
 
         const poolBalance = await storageContract.getBalance();
         undistributedRewards = await storageContract.getUndistributedRewards();
         console.log(fromNano(poolBalance), fromNano(undistributedRewards));
         // expectBigNumberEquals(poolBalance, undistributedRewards);
+
+        console.log(`Before claim undistributed rewards. Contract balance: ${fromNano(await storageContract.getBalance())}, Dave balance: ${fromNano(await Dave.getBalance())}, Undistributed rewards: ${fromNano(await storageContract.getUndistributedRewards())}`);
+        trans = await storageContract.sendRecycleUndistributedStorageFees(Dave.getSender());
+        expect(trans.transactions).toHaveTransaction({
+            from: Dave.address,
+            to: storageContract.address,
+            op: op_recycle_undistributed_storage_fees,
+            success: true
+        });
+        console.log(`After claim undistributed rewards. Contract balance: ${fromNano(await storageContract.getBalance())}, Dave balance: ${fromNano(await Dave.getBalance())}, Undistributed rewards: ${fromNano(await storageContract.getUndistributedRewards())}`);
+
 
     });
 

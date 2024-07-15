@@ -57,9 +57,11 @@ export class StorageContract implements Contract {
       const fileSizeInBytes = result.stack.readBigNumber();
       const storagePeriodInSec = result.stack.readBigNumber();
       const maxStorageProofSpanInSec = result.stack.readBigNumber();
+      const treasuryAddress = result.stack.readAddress();
+      const treasuryFeeRate = result.stack.readBigNumber();
 
       return [
-        torrentHash, ownerAddress, fileMerkleHash, fileSizeInBytes, storagePeriodInSec, maxStorageProofSpanInSec
+        torrentHash, ownerAddress, fileMerkleHash, fileSizeInBytes, storagePeriodInSec, maxStorageProofSpanInSec, treasuryAddress, treasuryFeeRate
       ];
   }
 

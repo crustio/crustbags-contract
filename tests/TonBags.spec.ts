@@ -9,7 +9,7 @@ import {
     error_file_too_small, error_file_too_large, error_storage_order_unexpired, error_unregistered_storage_provider,
     op_recycle_undistributed_storage_fees, op_unregister_as_storage_provider, op_submit_storage_proof, op_set_config_param,
     op_register_as_storage_provider, op_claim_storage_rewards, op_update_treasury, config_min_storage_period_in_sec,
-    config_max_storage_proof_span_in_sec, error_too_short_storage_period,
+    config_max_storage_proof_span_in_sec, error_too_short_storage_period, config_treasury_fee_rate,
     op_place_storage_order
 } from '../wrappers/constants';
 import { getMerkleRoot } from "./merkleProofUtils";
@@ -69,6 +69,13 @@ describe('TonBags', () => {
             success: true,
         });
         trans = await tonBags.sendSetConfigParam(Alice.getSender(), BigInt(config_max_storage_proof_span_in_sec), 60n * 60n);
+        expect(trans.transactions).toHaveTransaction({
+            from: Alice.address,
+            to: tonBags.address,
+            op: op_set_config_param,
+            success: true,
+        });
+        trans = await tonBags.sendSetConfigParam(Alice.getSender(), BigInt(config_treasury_fee_rate), 100n);
         expect(trans.transactions).toHaveTransaction({
             from: Alice.address,
             to: tonBags.address,
@@ -247,7 +254,10 @@ describe('TonBags', () => {
             op: op_place_storage_order,
             success: true
         });
-        let calStorageContractAddress = await tonBags.getStorageContractAddress(storageContractCode, Bob.address, torrentHash, fileSize, merkleRoot, toNano('1'), 60n * 60n * 24n * 30n, maxStorageProofSpan);
+        let calStorageContractAddress = await tonBags.getStorageContractAddress(
+            storageContractCode, Bob.address, torrentHash, fileSize, merkleRoot, toNano('1'), 60n * 60n * 24n * 30n, maxStorageProofSpan,
+            Treasury.address, await tonBags.getConfigParam(BigInt(config_treasury_fee_rate))
+        );
         let storageContract = blockchain.openContract(
             StorageContract.createFromAddress(
                 calStorageContractAddress
@@ -266,7 +276,10 @@ describe('TonBags', () => {
         console.log(`Storage contract address: ${storageContract.address}, balance: ${fromNano(await storageContract.getBalance())}`);
 
         // Check parameters
-        let [contractTorrentHash, ownerAddress, fileMerkleHash, fileSizeInBytes, storagePeriodInSec, maxStorageProofSpanInSec] = await storageContract.getOrderInfo();
+        let [
+            contractTorrentHash, ownerAddress, fileMerkleHash, fileSizeInBytes, storagePeriodInSec, maxStorageProofSpanInSec,
+            treasuryAddress, treasuryFeeRate
+        ] = await storageContract.getOrderInfo();
         expect(maxStorageProofSpanInSec).toEqual(maxStorageProofSpan);
 
         // Update parameters
@@ -282,14 +295,20 @@ describe('TonBags', () => {
             op: op_place_storage_order,
             success: true
         });
-        let calStorageContractAddress2 = await tonBags.getStorageContractAddress(storageContractCode, Bob.address, torrentHash, fileSize, merkleRoot, toNano('1'), 60n * 60n * 24n * 30n, newMaxStorageProofSpan);
+        let calStorageContractAddress2 = await tonBags.getStorageContractAddress(
+            storageContractCode, Bob.address, torrentHash, fileSize, merkleRoot, toNano('1'), 60n * 60n * 24n * 30n, newMaxStorageProofSpan,
+            Treasury.address, await tonBags.getConfigParam(BigInt(config_treasury_fee_rate))
+        );
         expect(calStorageContractAddress2).not.toEqual(calStorageContractAddress);
         let storageContract2 = blockchain.openContract(
             StorageContract.createFromAddress(
                 calStorageContractAddress2
             )
         );
-        [contractTorrentHash, ownerAddress, fileMerkleHash, fileSizeInBytes, storagePeriodInSec, maxStorageProofSpanInSec] = await storageContract2.getOrderInfo();
+        [
+            contractTorrentHash, ownerAddress, fileMerkleHash, fileSizeInBytes, storagePeriodInSec, maxStorageProofSpanInSec,
+            treasuryAddress, treasuryFeeRate
+        ] = await storageContract2.getOrderInfo();
         expect(maxStorageProofSpanInSec).toEqual(newMaxStorageProofSpan);
     });
 
@@ -297,7 +316,7 @@ describe('TonBags', () => {
         console.log(fromNano(await tonBags.getBalance()));
         const tonBagsBalanceBeforeDeployStorageContract = await tonBags.getBalance();
 
-        const dataArray = [ 0x0BAD0010n, 0x60A70020n, 0xBEEF0030n, 0xDEAD0040n, 0xCA110050n, 0x0E660060n, 0xFACE0070n, 0xBAD00080n, 0x060D0091n ];
+        const dataArray = [0x0BAD0010n, 0x60A70020n, 0xBEEF0030n, 0xDEAD0040n, 0xCA110050n, 0x0E660060n, 0xFACE0070n, 0xBAD00080n, 0x060D0091n ];
         const merkleRoot = getMerkleRoot(dataArray);
         const someInvalidMerkleRoot = merkleRoot - 1n;
         const torrentHash = BigInt('0x676848C3350EA64ACCC09218917132998267F2ABC283097082FD41D511CAF11B');
@@ -315,7 +334,11 @@ describe('TonBags', () => {
         });
         // let maxStorageProofSpan = await tonBags.getConfigParam(BigInt(config_max_storage_proof_span_in_sec));
         // console.log('maxStorageProofSpan: ', maxStorageProofSpan);
-        const calStorageContractAddress = await tonBags.getStorageContractAddress(storageContractCode, Dave.address, torrentHash, fileSize, merkleRoot, totalStorageFee, default_storage_period, default_max_storage_proof_span);
+        const storageFeeRate = await tonBags.getConfigParam(BigInt(config_treasury_fee_rate));
+        const calStorageContractAddress = await tonBags.getStorageContractAddress(
+            storageContractCode, Dave.address, torrentHash, fileSize, merkleRoot, totalStorageFee, default_storage_period, default_max_storage_proof_span,
+            Treasury.address, storageFeeRate
+        );
         // expect(await tonBags.getStorageContractAddress(torrentHash)).not.toBeNull();
 
         const storageContract = blockchain.openContract(
@@ -324,7 +347,10 @@ describe('TonBags', () => {
             )
         );
 
-        let [contractTorrentHash, ownerAddress, fileMerkleHash, fileSizeInBytes, storagePeriodInSec, maxStorageProofSpanInSec] = await storageContract.getOrderInfo();
+        let [
+            contractTorrentHash, ownerAddress, fileMerkleHash, fileSizeInBytes, storagePeriodInSec, maxStorageProofSpanInSec,
+            treasuryAddress, treasuryFeeRate
+        ] = await storageContract.getOrderInfo();
         expect(contractTorrentHash).toEqual(torrentHash);
         expect(ownerAddress).toEqualAddress(Dave.address);
         expect(fileMerkleHash).toEqual(merkleRoot);
@@ -768,7 +794,7 @@ describe('TonBags', () => {
             success: true
         });
         console.log(`After claim undistributed rewards. Contract balance: ${fromNano(await storageContract.getBalance())}, Dave balance: ${fromNano(await Dave.getBalance())}, Undistributed rewards: ${fromNano(await storageContract.getUndistributedRewards())}`);
-
+        console.log(`Treasury account balance: ${fromNano(await Treasury.getBalance())}`);
 
     });
 

@@ -2,18 +2,19 @@ const CHUNK_SIZE = 64;
 const int one_ton = 1000000000; ;;10^9
 
 const int default_storage_period = 60 * 60 * 24 * 180; ;; 180 days
-
 const int default_min_storage_fee = one_ton / 10; ;; 0.1 TON minimal storage fee
 const int default_min_storage_period_in_sec = 60 * 60 * 24 * 7; ;; 7 days
 const int default_max_storage_proof_span = 60 * 60; ;; 1 hour
 const int default_minimal_file_size_in_bytes = 1; ;; 1 byte
 const int default_maximal_file_size_in_bytes = 1024 * 1024 * 1024 * 10; ;; 10 GB
+const int max_treasury_fee_rate = 1000;
 
 const config::min_storage_fee = "config::min_storage_fee"c;
 const config::min_storage_period_in_sec = "config::min_storage_period_in_sec"c;
 const config::max_storage_proof_span_in_sec = "config::max_storage_proof_span_in_sec"c;
 const config::min_file_size_in_bytes = "config::min_file_size_in_bytes"c;
 const config::max_file_size_in_bytes = "config::max_file_size_in_bytes"c;
+const config::treasury_fee_rate = "config::treasury_fee_rate"c;  ;; 0 ~ 1000 (divided by 10000), means 0% ~ 10%
 
 const op::update_admin = "op::update_admin"c;
 const op::update_treasury = "op::update_treasury"c;
@@ -40,3 +41,4 @@ const error::invalid_storage_proof = 1007;
 const error::unregistered_storage_provider = 1008;
 const error::storage_order_unexpired = 1009;
 const error::invalid_storage_provider = 1010;
+const error::too_large_treasury_fee_rate = 1011;

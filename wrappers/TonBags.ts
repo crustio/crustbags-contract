@@ -152,7 +152,8 @@ export class TonBags implements Contract {
         provider: ContractProvider, 
         storageContractCode: Cell, ownerAddress: Address,
         torrentHash: bigint, fileSize: bigint, merkleHash: bigint, initialStorageFee: bigint,
-        storagePeriodInSec: bigint, maxStorageProofSpanInSec: bigint
+        storagePeriodInSec: bigint, maxStorageProofSpanInSec: bigint,
+        treasuryAddress: Address, treasuryFeeRate: bigint
     ) {
         const result = await provider.get('get_storage_contract_address', [
             {type: 'cell', cell: storageContractCode},
@@ -162,7 +163,9 @@ export class TonBags implements Contract {
             {type: 'int', value: merkleHash},
             {type: 'int', value: initialStorageFee},
             {type: 'int', value: storagePeriodInSec},
-            {type: 'int', value: maxStorageProofSpanInSec}
+            {type: 'int', value: maxStorageProofSpanInSec},
+            {type: 'slice', cell: beginCell().storeAddress(treasuryAddress).endCell()},
+            {type: 'int', value: treasuryFeeRate}
         ]);
         return result.stack.readAddress();
     }

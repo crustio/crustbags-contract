@@ -64,10 +64,17 @@ int get_config_param(int param, int default_value) inline {
     var min_storage_period_in_sec = get_config_param(config::min_storage_period_in_sec, default_min_storage_period_in_sec);
     throw_unless(error::too_short_storage_period, storage_period_in_sec >= min_storage_period_in_sec);
 
+    var (admin_address, treasury_address, storage_contract_code, config_params_dict) = load_data();
+
     var max_storage_proof_span_in_sec = get_config_param(config::max_storage_proof_span_in_sec, default_max_storage_proof_span);
+    var treasury_fee_rate = get_config_param(config::treasury_fee_rate, 0);
+    if (treasury_fee_rate > max_treasury_fee_rate) {
+        treasury_fee_rate = max_treasury_fee_rate;
+    }
     cell state_init = build_storage_contract_stateinit(
         storage_contract_code, torrent_hash, owner_address, merkle_hash, file_size, 
-        initial_storage_fee, storage_period_in_sec, max_storage_proof_span_in_sec
+        initial_storage_fee, storage_period_in_sec, max_storage_proof_span_in_sec,
+        treasury_address, treasury_fee_rate
     );
     slice storage_contract_address = calculate_storage_contract_address(state_init);
 
@@ -168,11 +175,13 @@ int get_param_value(int param) method_id {
 slice get_storage_contract_address(
     cell storage_contract_code, slice owner_address,
     int torrent_hash, int file_size, int merkle_hash, int initial_storage_fee,
-    int storage_period_in_sec, int max_storage_proof_span_in_sec
+    int storage_period_in_sec, int max_storage_proof_span_in_sec,
+    slice treasury_address, int treasury_fee_rate
 ) method_id {
     cell state_init = build_storage_contract_stateinit(
         storage_contract_code, torrent_hash, owner_address, merkle_hash, file_size,
-        initial_storage_fee, storage_period_in_sec, max_storage_proof_span_in_sec
+        initial_storage_fee, storage_period_in_sec, max_storage_proof_span_in_sec,
+        treasury_address, treasury_fee_rate
     );
     slice storage_contract_address = calculate_storage_contract_address(state_init);
     return storage_contract_address;

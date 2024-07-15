@@ -13,8 +13,13 @@ cell build_storage_contract_stateinit(
     cell storage_contract_code,
     int torrent_hash, slice owner_address,
     int file_merkle_hash, int file_size_in_bytes, int total_rewards,
-    int storage_period_in_sec, int max_storage_proof_span_in_sec
+    int storage_period_in_sec, int max_storage_proof_span_in_sec,
+    slice treasury_address, int treasury_fee_rate
 ) {
+    cell treasury_info = begin_cell()
+            .store_slice(treasury_address)
+            .store_uint(treasury_fee_rate, 16)
+            .end_cell();
     cell order_info = begin_cell()
             .store_uint(torrent_hash, 256)
             .store_slice(owner_address)
@@ -22,6 +27,7 @@ cell build_storage_contract_stateinit(
             .store_uint(file_size_in_bytes, 64)
             .store_uint(storage_period_in_sec, 64)
             .store_uint(max_storage_proof_span_in_sec, 64)
+            .store_ref(treasury_info)
             .end_cell();
     
     ;; started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards,

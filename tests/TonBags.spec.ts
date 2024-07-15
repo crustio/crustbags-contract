@@ -367,6 +367,7 @@ describe('TonBags', () => {
         //       + 0.5 hour (Joined)
         //       + 0.5 hour
         //       + 0.5 hour (Submit valid report => 1 hours rewards / 2)
+        console.log(`Hour 4.0: Alice and Bob submit valid reports`);
         blockchain.now = lastTime + ONE_HOUR_IN_SECS - 1;
         lastTime = blockchain.now;
         trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), merkleRoot);
@@ -388,9 +389,235 @@ describe('TonBags', () => {
         expectBigNumberEquals(await storageContract.getEarned(Alice.address), totalRewardsPerHour / 2n + totalRewardsPerHour / 2n);
         expectBigNumberEquals(await storageContract.getEarned(Bob.address), totalRewardsPerHour / 2n);
 
-        
+        // Caro joins the pool
+        console.log(`Hour 4.0: Caro registers as a storage provider`);
+        trans = await storageContract.sendRegisterAsStorageProvider(Caro.getSender());
+        expect(trans.transactions).toHaveTransaction({
+            from: Caro.address,
+            to: storageContract.address,
+            op: op_register_as_storage_provider,
+            success: true
+        });
+        expect(await storageContract.getTotalStorageProviders()).toEqual(3n);
 
+        // 1 hour later (within), Alice, Bob, Call, all submit valid reports. They share the rewards
+        // Alice Timeline: 
+        //       Genesis Time (Joined)
+        //       + 1 hour (Submit valid report => 1 hour rewards) 
+        //       + 1.5 hour (Submit valid report => ignored due to timeout => 1.5 hours rewards undistributed )
+        //       + 0.5 hour (Submit valid report => 0.5 hours rewards)
+        //       + 0.5 hour (Submit invalid report => ignored)
+        //       + 0.5 hour (Submit valid report => another 1 hours rewards / 2)
+        //       + 1 hour (Submit valid report => 1 hours rewards / 3)
+        // Bob Timeline: 
+        //       Genesis Time
+        //       + 1 hour
+        //       + 1.5 hour
+        //       + 0.5 hour (Joined)
+        //       + 0.5 hour
+        //       + 0.5 hour (Submit valid report => 1 hours rewards / 2)
+        //       + 1 hour (Submit valid report => 1 hours rewards / 3)
+        // Caro Timeline:
+        //       Genesis Time
+        //       + 1 hour
+        //       + 1.5 hour
+        //       + 0.5 hour 
+        //       + 0.5 hour
+        //       + 0.5 hour (Joined)
+        //       + 1 hour (Submit valid report => 1 hours rewards / 3)
+        blockchain.now = lastTime + ONE_HOUR_IN_SECS - 1;
+        trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), merkleRoot);
+        expect(trans.transactions).toHaveTransaction({
+            from: Alice.address,
+            to: storageContract.address,
+            op: op_submit_storage_proof,
+            success: true
+        });
+        expect(await storageContract.getLastProofValid(Alice.address)).not.toBeFalsy();
+        trans = await storageContract.sendSubmitStorageProof(Bob.getSender(), merkleRoot);
+        expect(trans.transactions).toHaveTransaction({
+            from: Bob.address,
+            to: storageContract.address,
+            op: op_submit_storage_proof,
+            success: true
+        });
+        expect(await storageContract.getLastProofValid(Bob.address)).not.toBeFalsy();
+        trans = await storageContract.sendSubmitStorageProof(Caro.getSender(), merkleRoot);
+        expect(trans.transactions).toHaveTransaction({
+            from: Caro.address,
+            to: storageContract.address,
+            op: op_submit_storage_proof,
+            success: true
+        });
+        expect(await storageContract.getLastProofValid(Caro.address)).not.toBeFalsy();
+        expectBigNumberEquals(await storageContract.getEarned(Alice.address), totalRewardsPerHour / 2n + totalRewardsPerHour / 2n + totalRewardsPerHour / 3n);
+        expectBigNumberEquals(await storageContract.getEarned(Bob.address), totalRewardsPerHour / 2n + totalRewardsPerHour / 3n);
+        expectBigNumberEquals(await storageContract.getEarned(Caro.address), totalRewardsPerHour / 3n);
 
+        // Alice exits the pool, and still could claim his rewards
+        trans = await storageContract.sendUnregisterAsStorageProvider(Alice.getSender());
+        expect(trans.transactions).toHaveTransaction({
+            from: Alice.address,
+            to: storageContract.address,
+            op: op_unregister_as_storage_provider,
+            success: true
+        });
+        expect(await storageContract.getTotalStorageProviders()).toEqual(2n);
+        const aliceExactRewards = await storageContract.getEarned(Alice.address);
+        expectBigNumberEquals(aliceExactRewards, totalRewardsPerHour / 2n + totalRewardsPerHour / 2n + totalRewardsPerHour / 3n);
+        trans = await storageContract.sendClaimStorageRewards(Alice.getSender());
+        expect(trans.transactions).toHaveTransaction({
+            from: Alice.address,
+            to: storageContract.address,
+            op: op_claim_storage_rewards,
+            success: true
+        });
+
+        // 1 hour later (within), Bob and Caro submit valid reports, and share the rewards
+        // Alice Timeline: 
+        //       Genesis Time (Joined)
+        //       + 1 hour (Submit valid report => 1 hour rewards) 
+        //       + 1.5 hour (Submit valid report => ignored due to timeout => 1.5 hours rewards undistributed )
+        //       + 0.5 hour (Submit valid report => 0.5 hours rewards)
+        //       + 0.5 hour (Submit invalid report => ignored)
+        //       + 0.5 hour (Submit valid report => another 1 hours rewards / 2)
+        //       + 1 hour (Submit valid report => 1 hours rewards / 3)  && (Exit)
+        // Bob Timeline: 
+        //       Genesis Time
+        //       + 1 hour
+        //       + 1.5 hour
+        //       + 0.5 hour (Joined)
+        //       + 0.5 hour
+        //       + 0.5 hour (Submit valid report => 1 hours rewards / 2)
+        //       + 1 hour (Submit valid report => 1 hours rewards / 3)
+        //       + 1 hour (Submit valid report => 1 hours rewards / 2)
+        // Caro Timeline:
+        //       Genesis Time
+        //       + 1 hour
+        //       + 1.5 hour
+        //       + 0.5 hour 
+        //       + 0.5 hour
+        //       + 0.5 hour (Joined)
+        //       + 1 hour (Submit valid report => 1 hours rewards / 3)
+        //       + 1 hour (Submit valid report => 1 hours rewards / 2)
+        expectBigNumberEquals(await storageContract.getEarned(Bob.address), totalRewardsPerHour / 2n + totalRewardsPerHour / 3n);
+        expectBigNumberEquals(await storageContract.getEarned(Caro.address), totalRewardsPerHour / 3n);
+        blockchain.now = lastTime + ONE_HOUR_IN_SECS * 2 - 1;
+        trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), merkleRoot);
+        expect(trans.transactions).toHaveTransaction({
+            from: Alice.address,
+            to: storageContract.address,
+            aborted: true,
+            exitCode: error_unregistered_storage_provider,
+            success: false
+        });
+        trans = await storageContract.sendSubmitStorageProof(Bob.getSender(), merkleRoot);
+        expect(trans.transactions).toHaveTransaction({
+            from: Bob.address,
+            to: storageContract.address,
+            op: op_submit_storage_proof,
+            success: true
+        });
+        expect(await storageContract.getLastProofValid(Bob.address)).not.toBeFalsy();
+        trans = await storageContract.sendSubmitStorageProof(Caro.getSender(), merkleRoot);
+        expect(trans.transactions).toHaveTransaction({
+            from: Caro.address,
+            to: storageContract.address,
+            op: op_submit_storage_proof,
+            success: true
+        });
+        expect(await storageContract.getLastProofValid(Caro.address)).not.toBeFalsy();
+        expectBigNumberEquals(await storageContract.getEarned(Bob.address), totalRewardsPerHour / 2n + totalRewardsPerHour / 3n + totalRewardsPerHour / 2n);
+        expectBigNumberEquals(await storageContract.getEarned(Caro.address), totalRewardsPerHour / 3n + totalRewardsPerHour / 2n);
+
+        // 1 hour later (within), Bob leaves the pool, and Caro submits a valid report. Caro gets all the rewards
+        // Bob Timeline: 
+        //       Genesis Time
+        //       + 1 hour
+        //       + 1.5 hour
+        //       + 0.5 hour (Joined)
+        //       + 0.5 hour
+        //       + 0.5 hour (Submit valid report => 1 hours rewards / 2)
+        //       + 1 hour (Submit valid report => 1 hours rewards / 3)
+        //       + 1 hour (Submit valid report => 1 hours rewards / 2)
+        //       + 1 hour (Exit => 1 hours rewards / 2 to undistributed)
+        // Caro Timeline:
+        //       Genesis Time
+        //       + 1 hour
+        //       + 1.5 hour
+        //       + 0.5 hour 
+        //       + 0.5 hour
+        //       + 0.5 hour (Joined)
+        //       + 1 hour (Submit valid report => 1 hours rewards / 3)
+        //       + 1 hour (Submit valid report => 1 hours rewards / 2)
+        //       + 1 hour (Submit valid report => 1 hours rewards / 2)
+        // console.log("######################");
+        let undistributedRewards = await storageContract.getUndistributedRewards();
+        blockchain.now = lastTime + ONE_HOUR_IN_SECS * 3 - 1;
+        trans = await storageContract.sendUnregisterAsStorageProvider(Bob.getSender());
+        expect(trans.transactions).toHaveTransaction({
+            from: Bob.address,
+            to: storageContract.address,
+            op: op_unregister_as_storage_provider,
+            success: true
+        });
+        expect(await storageContract.getTotalStorageProviders()).toEqual(1n);
+        trans = await storageContract.sendSubmitStorageProof(Caro.getSender(), merkleRoot);
+        expect(trans.transactions).toHaveTransaction({
+            from: Caro.address,
+            to: storageContract.address,
+            op: op_submit_storage_proof,
+            success: true
+        });
+        expect(await storageContract.getLastProofValid(Caro.address)).not.toBeFalsy();
+        expectBigNumberEquals(await storageContract.getEarned(Caro.address), totalRewardsPerHour / 3n + totalRewardsPerHour / 2n + totalRewardsPerHour / 2n);
+        expectBigNumberEquals(await storageContract.getUndistributedRewards(), undistributedRewards + totalRewardsPerHour / 2n);
+
+        let exactRewardsOfCaro = await storageContract.getEarned(Caro.address);
+        undistributedRewards = await storageContract.getUndistributedRewards();
+
+        // Fast forward to the end
+        blockchain.now = await Number(await storageContract.getPeriodFinish()) + 1;
+        // Caro's total rewards should remain unchanged, since she does not submit valid report
+        expectBigNumberEquals(await storageContract.getEarned(Caro.address), exactRewardsOfCaro);
+
+        // Now Dave could recylce the undistributed rewards
+        trans = await storageContract.sendRecycleUndistributedStorageFees(Alice.getSender(), Bob.address);
+        expect(trans.transactions).toHaveTransaction({
+            from: Alice.address,
+            to: storageContract.address,
+            aborted: true,
+            exitCode: error_unauthorized,
+            success: false
+        });
+        trans = await storageContract.sendRecycleUndistributedStorageFees(Dave.getSender(), Bob.address);
+        expect(trans.transactions).toHaveTransaction({
+            from: Dave.address,
+            to: storageContract.address,
+            op: op_recycle_undistributed_storage_fees,
+            success: true
+        });
+
+        // Now Caro exits the pool, her un-settled rewards should be tracked as undistributed rewards
+        trans = await storageContract.sendUnregisterAsStorageProvider(Caro.getSender());
+        expect(trans.transactions).toHaveTransaction({
+            from: Caro.address,
+            to: storageContract.address,
+            op: op_unregister_as_storage_provider,
+            success: true
+        });
+        trans = await storageContract.sendClaimStorageRewards(Caro.getSender());
+        expect(trans.transactions).toHaveTransaction({
+            from: Caro.address,
+            to: storageContract.address,
+            op: op_claim_storage_rewards,
+            success: true
+        });
+
+        const poolBalance = await storageContract.getBalance();
+        undistributedRewards = await storageContract.getUndistributedRewards();
+        console.log(fromNano(poolBalance), fromNano(undistributedRewards));
+        // expectBigNumberEquals(poolBalance, undistributedRewards);
 
     });
 

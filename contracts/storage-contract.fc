@@ -533,7 +533,6 @@ int per_sec_total_rewards_pending_settle_for_provider(slice provider_address) in
         started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
         per_sec_per_provider_total_rewards_settled_scaled, period_finish, last_settle_time
     ) = load_rewards_params();
-    total_storage_providers -= 1;
     undistributed_rewards_scaled += pending_rewards;
     save_rewards_params(
         started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
@@ -541,6 +540,16 @@ int per_sec_total_rewards_pending_settle_for_provider(slice provider_address) in
     );
 
     do_settle_rewards(provider_address, 0, 0);
+
+    var (
+        started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
+        per_sec_per_provider_total_rewards_settled_scaled, period_finish, last_settle_time
+    ) = load_rewards_params();
+    total_storage_providers -= 1;
+    save_rewards_params(
+        started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
+        per_sec_per_provider_total_rewards_settled_scaled, period_finish, last_settle_time
+    );
 
     storage_providers_dict~udict_delete?(256, provider_addr);
     save_storage_providers_dict(storage_providers_dict);

@@ -30,6 +30,28 @@
     );
 }
 
+int get_config_param(int param, int default_value) inline {
+    ;; ~strdump("get_config_param():");
+    ;; ~dump(param);
+    (slice admin_address, slice treasury_address, cell storage_contract_code, cell config_params_dict) = load_data();
+    var (val, found?) = config_params_dict.udict_get_ref?(256, param);
+    if (~ found?) {
+        return default_value;
+    }
+    var ds = val.begin_parse();
+    var value = ds~load_uint(256);
+    ;; ~dump(value);
+    return value;
+}
+
+() set_config_param(int param, int value) impure inline {
+    ;; ~strdump("set_config_param(), param, value:");
+    ;; ~dump([param, value]);
+    (slice admin_address, slice treasury_address, cell storage_contract_code, cell config_params_dict) = load_data();
+    config_params_dict~udict_set_ref(256, param, begin_cell().store_uint(value, 256).end_cell());
+    save_data(admin_address, treasury_address, storage_contract_code, config_params_dict);
+}
+
 () deploy_storage_contract(
     cell storage_contract_code, slice owner_address, int query_id,
     int torrent_hash, int file_size, int merkle_hash, int initial_storage_fee
@@ -90,6 +112,15 @@
         return ();
     }
 
+    if (op == op::set_config_param) {
+        throw_unless(error::unauthorized, equal_slice_bits(sender_address, admin_address));
+        ~strdump("op::set_config_param");
+        int param = in_msg_body~load_uint(256);
+        int value = in_msg_body~load_uint(256);
+        set_config_param(param, value);
+        return ();
+    }
+
     if (op == op::place_storage_order) {
         int torrent_hash = in_msg_body~load_uint(256);
         int file_size = in_msg_body~load_uint(64);
@@ -115,6 +146,11 @@ slice get_admin_address() method_id {
 slice get_treasury_address() method_id {
     (slice admin_address, slice treasury_address, cell storage_contract_code, cell config_params_dict) = load_data();
     return treasury_address;
+}
+
+int get_param_value(int param) method_id {
+    int value = get_config_param(param, -1);
+    return value;
 }
 
 slice get_storage_contract_address(

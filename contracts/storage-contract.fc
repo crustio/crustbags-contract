@@ -803,10 +803,11 @@ int get_next_proof(slice provider_address) method_id {
     (int wc, int provider_addr) = parse_std_addr(provider_address);
     var storage_provider_next_proofs_dict = load_storage_provider_next_proofs();
 
-    var (val, found?) = storage_provider_next_proofs_dict.udict_get?(256, provider_addr);
+    var (val, found?) = storage_provider_next_proofs_dict.udict_get_ref?(256, provider_addr);
     if (~ found?) {
         return -1;
     }
-    var next_proof = val~load_uint(64);
+    var ds = val.begin_parse();
+    var next_proof = ds~load_uint(64);
     return next_proof;
 }

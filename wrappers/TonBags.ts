@@ -4,7 +4,7 @@ import {
     BitString
 } from '@ton/core';
 
-import { op_update_admin, op_update_treasury, op_place_storage_order } from './constants';
+import { op_update_admin, op_update_treasury, op_set_config_param, op_place_storage_order } from './constants';
 
 export type TonBagsContent = {
     type: 0 | 1;
@@ -22,7 +22,7 @@ export type TonBagsConfig = {
     adminAddress: Address;
     treasuryAddress: Address;
     storageContractCode: Cell;
-    configParamsDict: Dictionary<BitString, Cell>;
+    configParamsDict: Dictionary<bigint, Cell>;
 };
 
 export function tonBagsConfigToCell(config: TonBagsConfig): Cell {
@@ -91,6 +91,21 @@ export class TonBags implements Contract {
         });
     }
 
+    async sendSetConfigParam(provider: ContractProvider, via: Sender, param: bigint, value: bigint) {
+        const msg = beginCell()
+        .storeUint(op_set_config_param, 32)  // op
+        .storeUint(0, 64) // queryId
+        .storeUint(param, 256)
+        .storeUint(value, 256)
+        .endCell();
+
+        await provider.internal(via, {
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: msg,
+            value: toNano('0.1'),
+        });
+    }
+
     static placeStorageOrderMessage(torrentHash: bigint, fileSize: bigint, merkleHash: bigint, totalStorageFee: bigint) {
         return beginCell()
             .storeUint(op_place_storage_order, 32)  // op
@@ -121,6 +136,15 @@ export class TonBags implements Contract {
     async getTreasuryAddress(provider: ContractProvider) {
         const result = await provider.get('get_treasury_address', []);
         return result.stack.readAddress();
+    }
+
+    async getConfigParam(
+        provider: ContractProvider, param: bigint
+    ) {
+        const result = await provider.get('get_param_value', [
+            {type: 'int', value: param}
+        ]);
+        return result.stack.readBigNumber();
     }
 
     async getStorageContractAddress(

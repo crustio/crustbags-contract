@@ -1,5 +1,5 @@
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
-import { Address, Cell, Dictionary, beginCell, toNano, fromNano, BitString } from '@ton/core';
+import { Address, Cell, Dictionary, beginCell, toNano, fromNano } from '@ton/core';
 import { TonBags } from '../wrappers/TonBags';
 import { StorageContract } from '../wrappers/StorageContract';
 import '@ton/test-utils';
@@ -7,8 +7,8 @@ import { compile } from '@ton/blueprint';
 import {
     error_unauthorized, error_not_enough_storage_fee, error_duplicated_torrent_hash,
     error_file_too_small, error_file_too_large, error_storage_order_unexpired, error_unregistered_storage_provider,
-    op_recycle_undistributed_storage_fees, op_unregister_as_storage_provider, op_submit_storage_proof,
-    op_register_as_storage_provider, op_claim_storage_rewards, op_update_treasury
+    op_recycle_undistributed_storage_fees, op_unregister_as_storage_provider, op_submit_storage_proof, op_set_config_param,
+    op_register_as_storage_provider, op_claim_storage_rewards, op_update_treasury, config_min_storage_period_in_sec
 } from '../wrappers/constants';
 import { getMerkleRoot } from "./merkleProofUtils";
 import { ONE_HOUR_IN_SECS, expectBigNumberEquals, default_storage_period } from "./utils";
@@ -25,7 +25,7 @@ describe('TonBags', () => {
     let Dave: SandboxContract<TreasuryContract>;
     let Eva: SandboxContract<TreasuryContract>;
     let tonBags: SandboxContract<TonBags>;
-    let configParamsDict: Dictionary<BitString, Cell>;
+    let configParamsDict: Dictionary<bigint, Cell>;
 
     beforeAll(async () => {
         tonBagsCode = await compile('TonBags');
@@ -95,7 +95,7 @@ describe('TonBags', () => {
         });
     });
 
-    it('admin can update treasury and parameters', async () => {
+    it('admin can update treasury and config parameters', async () => {
         expect(await tonBags.getAdminAddress()).toEqualAddress(Alice.address);
         expect(await tonBags.getTreasuryAddress()).toEqualAddress(Treasury.address);
 
@@ -118,6 +118,22 @@ describe('TonBags', () => {
             success: true
         });
         expect(await tonBags.getTreasuryAddress()).toEqualAddress(newTreasury.address);
+
+        trans = await tonBags.sendSetConfigParam(Bob.getSender(), BigInt(config_min_storage_period_in_sec), 60n * 60n * 24n * 7n);
+        expect(trans.transactions).toHaveTransaction({
+            from: Bob.address,
+            to: tonBags.address,
+            aborted: true,
+            exitCode: error_unauthorized
+        });
+        trans = await tonBags.sendSetConfigParam(Alice.getSender(), BigInt(config_min_storage_period_in_sec), 60n * 60n * 24n * 7n);
+        expect(trans.transactions).toHaveTransaction({
+            from: Alice.address,
+            to: tonBags.address,
+            op: op_set_config_param,
+            success: true,
+        });
+        expect(await tonBags.getConfigParam(BigInt(config_min_storage_period_in_sec))).toEqual(60n * 60n * 24n * 7n);
     });
 
     it('anyone could place order to create a storage contract', async () => {

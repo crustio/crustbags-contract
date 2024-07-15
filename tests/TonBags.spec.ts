@@ -8,10 +8,11 @@ import {
     error_unauthorized, error_not_enough_storage_fee, error_duplicated_torrent_hash,
     error_file_too_small, error_file_too_large, error_storage_order_unexpired, error_unregistered_storage_provider,
     op_recycle_undistributed_storage_fees, op_unregister_as_storage_provider, op_submit_storage_proof, op_set_config_param,
-    op_register_as_storage_provider, op_claim_storage_rewards, op_update_treasury, config_min_storage_period_in_sec
+    op_register_as_storage_provider, op_claim_storage_rewards, op_update_treasury, config_min_storage_period_in_sec,
+    config_max_storage_proof_span_in_sec
 } from '../wrappers/constants';
 import { getMerkleRoot } from "./merkleProofUtils";
-import { ONE_HOUR_IN_SECS, expectBigNumberEquals, default_storage_period } from "./utils";
+import { ONE_HOUR_IN_SECS, expectBigNumberEquals, default_storage_period, default_max_storage_proof_span } from "./utils";
 
 describe('TonBags', () => {
     let tonBagsCode: Cell;
@@ -152,7 +153,7 @@ describe('TonBags', () => {
         const torrentHash = BigInt('0x476848C3350EA64ACCC09218917132998267F2ABC283097082FD41D511CAF11B');
         const fileSize = 1024n * 1024n * 10n;  // 10MB
 
-        let trans = await tonBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'));
+        let trans = await tonBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'), default_storage_period);
         expect(trans.transactions).toHaveTransaction({
             from: Bob.address,
             to: tonBags.address,
@@ -169,7 +170,7 @@ describe('TonBags', () => {
         // });
 
         const torrentHash2 = BigInt('0x476848C3350EA64ACCC09218917132998267F2ABC283097082FD41D511CAF11C');
-        trans = await tonBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash2, fileSize, merkleRoot, toNano('1'));
+        trans = await tonBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash2, fileSize, merkleRoot, toNano('1'), default_storage_period);
         expect(trans.transactions).toHaveTransaction({
             from: Caro.address,
             to: tonBags.address,
@@ -177,7 +178,7 @@ describe('TonBags', () => {
         });
 
         const torrentHash3 = BigInt('0x476848C3350EA64ACCC09218917132998267F2ABC283097082FD41D511CAF11D');
-        trans = await tonBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash3, 0n, merkleRoot, toNano('1'));
+        trans = await tonBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash3, 0n, merkleRoot, toNano('1'), default_storage_period);
         expect(trans.transactions).toHaveTransaction({
             from: Caro.address,
             to: tonBags.address,
@@ -186,7 +187,7 @@ describe('TonBags', () => {
             success: false
         });
 
-        trans = await tonBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash3, 1024n * 1024n * 1024n * 100n, merkleRoot, toNano('1'));
+        trans = await tonBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash3, 1024n * 1024n * 1024n * 100n, merkleRoot, toNano('1'), default_storage_period);
         expect(trans.transactions).toHaveTransaction({
             from: Caro.address,
             to: tonBags.address,
@@ -195,7 +196,7 @@ describe('TonBags', () => {
             success: false
         });
 
-        trans = await tonBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash3, 1024n * 1024n * 100n, merkleRoot, toNano('0.01'));
+        trans = await tonBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash3, 1024n * 1024n * 100n, merkleRoot, toNano('0.01'), default_storage_period);
         expect(trans.transactions).toHaveTransaction({
             from: Caro.address,
             to: tonBags.address,
@@ -220,13 +221,15 @@ describe('TonBags', () => {
         // 1 hour rewards: 0.24 / 24 = 0.01
         const totalStorageFee = toNano('43.2');
 
-        let trans = await tonBags.sendPlaceStorageOrder(Dave.getSender(), torrentHash, fileSize, merkleRoot, totalStorageFee);
+        let trans = await tonBags.sendPlaceStorageOrder(Dave.getSender(), torrentHash, fileSize, merkleRoot, totalStorageFee, default_storage_period);
         expect(trans.transactions).toHaveTransaction({
             from: Dave.address,
             to: tonBags.address,
             success: true
         });
-        const calStorageContractAddress = await tonBags.getStorageContractAddress(storageContractCode, Dave.address, torrentHash, fileSize, merkleRoot, totalStorageFee);
+        // let maxStorageProofSpan = await tonBags.getConfigParam(BigInt(config_max_storage_proof_span_in_sec));
+        // console.log('maxStorageProofSpan: ', maxStorageProofSpan);
+        const calStorageContractAddress = await tonBags.getStorageContractAddress(storageContractCode, Dave.address, torrentHash, fileSize, merkleRoot, totalStorageFee, default_storage_period, default_max_storage_proof_span);
         // expect(await tonBags.getStorageContractAddress(torrentHash)).not.toBeNull();
 
         const storageContract = blockchain.openContract(
@@ -235,11 +238,13 @@ describe('TonBags', () => {
             )
         );
 
-        let [contractTorrentHash, ownerAddress, fileMerkleHash, fileSizeInBytes] = await storageContract.getBagInfo();
+        let [contractTorrentHash, ownerAddress, fileMerkleHash, fileSizeInBytes, storagePeriodInSec, maxStorageProofSpanInSec] = await storageContract.getOrderInfo();
         expect(contractTorrentHash).toEqual(torrentHash);
         expect(ownerAddress).toEqualAddress(Dave.address);
         expect(fileMerkleHash).toEqual(merkleRoot);
         expect(fileSizeInBytes).toEqual(fileSize);
+        expect(storagePeriodInSec).toEqual(default_storage_period);
+        expect(maxStorageProofSpanInSec).toEqual(default_max_storage_proof_span);
         expect(await storageContract.getEarned(Alice.address)).toEqual(0n);
 
         console.log(fromNano(await tonBags.getBalance()));

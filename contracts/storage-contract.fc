@@ -6,13 +6,13 @@ const int SCALE = 1000000000 * 1000000000; ;;10^18
 
 {-
     storage#_
-        bag_info:^Cell rewards_params:^Cell storage_providers_info:^Cell rewards_settlement_info:^Cell = Storage;
+        order_info:^Cell rewards_params:^Cell storage_providers_info:^Cell rewards_settlement_info:^Cell = Storage;
 -}
 
 (cell, cell, cell, cell, cell, cell, cell, cell) load_data() inline {
     var ds = get_data().begin_parse();
 
-    var bag_info = ds~load_ref();
+    var order_info = ds~load_ref();
     var rewards_params = ds~load_ref();
 
     var storage_providers_info = ds~load_ref().begin_parse();
@@ -26,21 +26,21 @@ const int SCALE = 1000000000 * 1000000000; ;;10^18
     var per_sec_total_rewards_settled_for_providers_scaled = rewards_settlement_info~load_dict();
 
     return (
-        bag_info, rewards_params, storage_providers, storage_provider_last_proof_times, storage_provider_last_proof_valid, storage_provider_next_proofs, total_rewards_settled_and_unclaimed_for_providers_scaled, per_sec_total_rewards_settled_for_providers_scaled
+        order_info, rewards_params, storage_providers, storage_provider_last_proof_times, storage_provider_last_proof_valid, storage_provider_next_proofs, total_rewards_settled_and_unclaimed_for_providers_scaled, per_sec_total_rewards_settled_for_providers_scaled
     );
 }
 
-(int, slice, int, int) load_bag_info() inline {
+(int, slice, int, int, int, int) load_order_info() inline {
     var ds = get_data().begin_parse();
-    var (bag_info, residue) = (ds~load_ref(), ds);
+    var (order_info, residue) = (ds~load_ref(), ds);
     
-    ds = bag_info.begin_parse();
+    ds = order_info.begin_parse();
     var (
-        torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes
+        torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes, storage_period_in_sec, max_storage_proof_span_in_sec
     ) = (
-        ds~load_uint(256), ds~load_msg_addr(), ds~load_uint(256), ds~load_uint(64)
+        ds~load_uint(256), ds~load_msg_addr(), ds~load_uint(256), ds~load_uint(64), ds~load_uint(64), ds~load_uint(64)
     );
-    return (torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes);
+    return (torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes, storage_period_in_sec, max_storage_proof_span_in_sec);
 }
 
 (int, int, int, int, int, int, int, int) load_rewards_params() inline {
@@ -68,7 +68,7 @@ const int SCALE = 1000000000 * 1000000000; ;;10^18
 ) impure {
     var ds = get_data().begin_parse();
     var (
-        bag_info, _, residue
+        order_info, _, residue
     ) = (
         ds~load_ref(), ds~load_ref(), ds
     );
@@ -85,7 +85,7 @@ const int SCALE = 1000000000 * 1000000000; ;;10^18
 
     set_data(
         begin_cell()
-            .store_ref(bag_info)
+            .store_ref(order_info)
             .store_ref(rewards_params)
             .store_slice(residue)
             .end_cell()
@@ -107,7 +107,7 @@ cell load_storage_providers_dict() inline {
 () save_storage_providers_dict(cell storage_providers_dict) impure inline {
     var ds = get_data().begin_parse();
     var (
-        bag_info, rewards_params, storage_providers_info, residue
+        order_info, rewards_params, storage_providers_info, residue
     ) = (
         ds~load_ref(), ds~load_ref(), ds~load_ref(), ds
     );
@@ -128,7 +128,7 @@ cell load_storage_providers_dict() inline {
 
     set_data(
         begin_cell()
-            .store_ref(bag_info)
+            .store_ref(order_info)
             .store_ref(rewards_params)
             .store_ref(storage_providers_info)
             .store_slice(residue)
@@ -156,7 +156,7 @@ cell load_storage_provider_last_proof_times() inline {
 () save_storage_provider_last_proof_times(cell storage_provider_last_proof_times) impure inline {
     var ds = get_data().begin_parse();
     var (
-        bag_info, rewards_params, storage_providers_info, residue
+        order_info, rewards_params, storage_providers_info, residue
     ) = (
         ds~load_ref(), ds~load_ref(), ds~load_ref(), ds
     );
@@ -177,7 +177,7 @@ cell load_storage_provider_last_proof_times() inline {
 
     set_data(
         begin_cell()
-            .store_ref(bag_info)
+            .store_ref(order_info)
             .store_ref(rewards_params)
             .store_ref(storage_providers_info)
             .store_slice(residue)
@@ -205,7 +205,7 @@ cell load_storage_provider_last_proof_valid() inline {
 () save_storage_provider_last_proof_valid(cell storage_provider_last_proof_valid) impure inline {
     var ds = get_data().begin_parse();
     var (
-        bag_info, rewards_params, storage_providers_info, residue
+        order_info, rewards_params, storage_providers_info, residue
     ) = (
         ds~load_ref(), ds~load_ref(), ds~load_ref(), ds
     );
@@ -226,7 +226,7 @@ cell load_storage_provider_last_proof_valid() inline {
 
     set_data(
         begin_cell()
-            .store_ref(bag_info)
+            .store_ref(order_info)
             .store_ref(rewards_params)
             .store_ref(storage_providers_info)
             .store_slice(residue)
@@ -254,7 +254,7 @@ cell load_storage_provider_next_proofs() inline {
 () save_storage_provider_next_proofs(cell storage_provider_next_proofs) impure inline {
     var ds = get_data().begin_parse();
     var (
-        bag_info, rewards_params, storage_providers_info, residue
+        order_info, rewards_params, storage_providers_info, residue
     ) = (
         ds~load_ref(), ds~load_ref(), ds~load_ref(), ds
     );
@@ -275,7 +275,7 @@ cell load_storage_provider_next_proofs() inline {
 
     set_data(
         begin_cell()
-            .store_ref(bag_info)
+            .store_ref(order_info)
             .store_ref(rewards_params)
             .store_ref(storage_providers_info)
             .store_slice(residue)
@@ -303,7 +303,7 @@ cell load_total_rewards_settled_and_unclaimed_for_providers() inline {
 () save_total_rewards_settled_and_unclaimed_for_providers(cell total_rewards_settled_and_unclaimed_for_providers_scaled) impure inline {
     var ds = get_data().begin_parse();
     var (
-        bag_info, rewards_params, storage_providers_info, rewards_settlement_info
+        order_info, rewards_params, storage_providers_info, rewards_settlement_info
     ) = (
         ds~load_ref(), ds~load_ref(), ds~load_ref(), ds~load_ref()
     );
@@ -322,7 +322,7 @@ cell load_total_rewards_settled_and_unclaimed_for_providers() inline {
 
     set_data(
         begin_cell()
-            .store_ref(bag_info)
+            .store_ref(order_info)
             .store_ref(rewards_params)
             .store_ref(storage_providers_info)
             .store_ref(rewards_settlement_info)
@@ -350,7 +350,7 @@ cell load_per_sec_total_rewards_settled_for_providers() inline {
 () save_per_sec_total_rewards_settled_for_providers(cell per_sec_total_rewards_settled_for_providers_scaled) impure inline {
     var ds = get_data().begin_parse();
     var (
-        bag_info, rewards_params, storage_providers_info, rewards_settlement_info
+        order_info, rewards_params, storage_providers_info, rewards_settlement_info
     ) = (
         ds~load_ref(), ds~load_ref(), ds~load_ref(), ds~load_ref()
     );
@@ -369,7 +369,7 @@ cell load_per_sec_total_rewards_settled_for_providers() inline {
 
     set_data(
         begin_cell()
-            .store_ref(bag_info)
+            .store_ref(order_info)
             .store_ref(rewards_params)
             .store_ref(storage_providers_info)
             .store_ref(rewards_settlement_info)
@@ -507,7 +507,7 @@ int per_sec_total_rewards_pending_settle_for_provider(slice provider_address) in
     storage_providers_dict~udict_set_ref(256, provider_addr, begin_cell().store_uint(1, 1).end_cell());
     save_storage_providers_dict(storage_providers_dict);
 
-    var (torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes) = load_bag_info();
+    var (torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes, storage_period_in_sec, max_storage_proof_span_in_sec) = load_order_info();
     throw_unless(error::invalid_storage_provider, ~ equal_slice_bits(provider_address, owner_address));
     var next_proof = rand(file_size_in_bytes);
     var storage_provider_next_proofs_dict = load_storage_provider_next_proofs();
@@ -584,8 +584,8 @@ int per_sec_total_rewards_pending_settle_for_provider(slice provider_address) in
 
 () recycle(slice caller_address) impure {
     var (
-        torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes
-    ) = load_bag_info();
+        torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes, storage_period_in_sec, max_storage_proof_span_in_sec
+    ) = load_order_info();
     throw_unless(error::unauthorized, equal_slice_bits(caller_address, owner_address));
 
     var (
@@ -645,7 +645,10 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, cell file_dic
         last_work_report_time = ds~load_uint(32);
     }
 
-    var in_report_window = (now() - last_work_report_time) <= max_storage_proof_span;
+    var (
+        torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes, storage_period_in_sec, max_storage_proof_span_in_sec
+    ) = load_order_info();
+    var in_report_window = (now() - last_work_report_time) <= max_storage_proof_span_in_sec;
     if (~ in_report_window) {
         var (
             started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
@@ -715,8 +718,8 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, cell file_dic
         var next_proof = ds~load_uint(64);
 
         var (
-            torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes
-        ) = load_bag_info();
+            torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes, storage_period_in_sec, max_storage_proof_span_in_sec
+        ) = load_order_info();
         var valid = check_proof(file_merkle_hash, next_proof, file_size_in_bytes, file_dict_proof);
 
         var storage_providers_last_proof_valid_dict = load_storage_provider_last_proof_valid();
@@ -739,8 +742,8 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, cell file_dic
     throw(error::unknown_op);
 }
 
-(int, slice, int, int) get_bag_info() method_id {
-    return load_bag_info();
+(int, slice, int, int, int, int) get_order_info() method_id {
+    return load_order_info();
 }
 
 int started() method_id {

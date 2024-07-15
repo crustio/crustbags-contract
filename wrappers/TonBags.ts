@@ -96,7 +96,7 @@ export class TonBags implements Contract {
         .storeUint(op_set_config_param, 32)  // op
         .storeUint(0, 64) // queryId
         .storeUint(param, 256)
-        .storeUint(value, 256)
+        .storeUint(value, 64)
         .endCell();
 
         await provider.internal(via, {
@@ -106,7 +106,7 @@ export class TonBags implements Contract {
         });
     }
 
-    static placeStorageOrderMessage(torrentHash: bigint, fileSize: bigint, merkleHash: bigint, totalStorageFee: bigint) {
+    static placeStorageOrderMessage(torrentHash: bigint, fileSize: bigint, merkleHash: bigint, totalStorageFee: bigint, storagePeriodInSec: bigint) {
         return beginCell()
             .storeUint(op_place_storage_order, 32)  // op
             .storeUint(0, 64) // queryId
@@ -114,16 +114,17 @@ export class TonBags implements Contract {
             .storeUint(fileSize, 64)
             .storeUint(merkleHash, 256)
             .storeCoins(totalStorageFee)
+            .storeUint(storagePeriodInSec, 256)
             .endCell();;
     }
     
     async sendPlaceStorageOrder(
         provider: ContractProvider, via: Sender, torrentHash: bigint,
-        fileSize: bigint, merkleHash: bigint, totalStorageFee: bigint
+        fileSize: bigint, merkleHash: bigint, totalStorageFee: bigint, storagePeriodInSec: bigint
     ) {
         await provider.internal(via, {
             sendMode: SendMode.PAY_GAS_SEPARATELY,
-            body: TonBags.placeStorageOrderMessage(torrentHash, fileSize, merkleHash, totalStorageFee),
+            body: TonBags.placeStorageOrderMessage(torrentHash, fileSize, merkleHash, totalStorageFee, storagePeriodInSec),
             value: totalStorageFee + toNano('0.1'),
         });
     }
@@ -150,7 +151,8 @@ export class TonBags implements Contract {
     async getStorageContractAddress(
         provider: ContractProvider, 
         storageContractCode: Cell, ownerAddress: Address,
-        torrentHash: bigint, fileSize: bigint, merkleHash: bigint, initialStorageFee: bigint
+        torrentHash: bigint, fileSize: bigint, merkleHash: bigint, initialStorageFee: bigint,
+        storagePeriodInSec: bigint, maxStorageProofSpanInSec: bigint
     ) {
         const result = await provider.get('get_storage_contract_address', [
             {type: 'cell', cell: storageContractCode},
@@ -158,7 +160,9 @@ export class TonBags implements Contract {
             {type: 'int', value: torrentHash},
             {type: 'int', value: fileSize},
             {type: 'int', value: merkleHash},
-            {type: 'int', value: initialStorageFee}
+            {type: 'int', value: initialStorageFee},
+            {type: 'int', value: storagePeriodInSec},
+            {type: 'int', value: maxStorageProofSpanInSec}
         ]);
         return result.stack.readAddress();
     }

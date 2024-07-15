@@ -49,15 +49,17 @@ export class StorageContract implements Contract {
       });
   }
 
-  async getBagInfo(provider: ContractProvider) {
-      const result = await provider.get('get_bag_info', []);
+  async getOrderInfo(provider: ContractProvider) {
+      const result = await provider.get('get_order_info', []);
       const torrentHash = result.stack.readBigNumber();
       const ownerAddress = result.stack.readAddress();
       const fileMerkleHash = result.stack.readBigNumber();
       const fileSizeInBytes = result.stack.readBigNumber();
+      const storagePeriodInSec = result.stack.readBigNumber();
+      const maxStorageProofSpanInSec = result.stack.readBigNumber();
 
       return [
-        torrentHash, ownerAddress, fileMerkleHash, fileSizeInBytes
+        torrentHash, ownerAddress, fileMerkleHash, fileSizeInBytes, storagePeriodInSec, maxStorageProofSpanInSec
       ];
   }
 

@@ -39,7 +39,7 @@ int get_config_param(int param, int default_value) inline {
         return default_value;
     }
     var ds = val.begin_parse();
-    var value = ds~load_uint(256);
+    var value = ds~load_uint(64);
     ;; ~dump(value);
     return value;
 }
@@ -48,19 +48,24 @@ int get_config_param(int param, int default_value) inline {
     ;; ~strdump("set_config_param(), param, value:");
     ;; ~dump([param, value]);
     (slice admin_address, slice treasury_address, cell storage_contract_code, cell config_params_dict) = load_data();
-    config_params_dict~udict_set_ref(256, param, begin_cell().store_uint(value, 256).end_cell());
+    config_params_dict~udict_set_ref(256, param, begin_cell().store_uint(value, 64).end_cell());
     save_data(admin_address, treasury_address, storage_contract_code, config_params_dict);
 }
 
 () deploy_storage_contract(
     cell storage_contract_code, slice owner_address, int query_id,
-    int torrent_hash, int file_size, int merkle_hash, int initial_storage_fee
+    int torrent_hash, int file_size, int merkle_hash, int initial_storage_fee, int storage_period_in_sec
 ) impure {
     throw_unless(error::file_too_small, file_size >= minimal_file_size);
     throw_unless(error::file_too_large, file_size <= maximal_file_size);
 
+    var min_storage_period_in_sec = get_config_param(config::min_storage_period_in_sec, default_min_storage_period_in_sec);
+    throw_unless(error::too_short_storage_period, storage_period_in_sec >= min_storage_period_in_sec);
+
+    var max_storage_proof_span_in_sec = get_config_param(config::max_storage_proof_span_in_sec, default_max_storage_proof_span);
     cell state_init = build_storage_contract_stateinit(
-        storage_contract_code, torrent_hash, owner_address, merkle_hash, file_size, initial_storage_fee
+        storage_contract_code, torrent_hash, owner_address, merkle_hash, file_size, 
+        initial_storage_fee, storage_period_in_sec, max_storage_proof_span_in_sec
     );
     slice storage_contract_address = calculate_storage_contract_address(state_init);
 
@@ -116,7 +121,7 @@ int get_config_param(int param, int default_value) inline {
         throw_unless(error::unauthorized, equal_slice_bits(sender_address, admin_address));
         ~strdump("op::set_config_param");
         int param = in_msg_body~load_uint(256);
-        int value = in_msg_body~load_uint(256);
+        int value = in_msg_body~load_uint(64);
         set_config_param(param, value);
         return ();
     }
@@ -126,11 +131,15 @@ int get_config_param(int param, int default_value) inline {
         int file_size = in_msg_body~load_uint(64);
         int merkle_hash = in_msg_body~load_uint(256);
         int total_storage_fee = in_msg_body~load_coins(); ;; VarUInteger 16
+        int storage_period_in_sec = in_msg_body~load_uint(256);
 
         throw_unless(error::not_enough_storage_fee, total_storage_fee >= min_storage_fee);
         throw_unless(error::not_enough_storage_fee, msg_value >= total_storage_fee);
 
-        deploy_storage_contract(storage_contract_code, sender_address, query_id, torrent_hash, file_size, merkle_hash, total_storage_fee);
+        deploy_storage_contract(
+            storage_contract_code, sender_address, query_id, torrent_hash,
+            file_size, merkle_hash, total_storage_fee, storage_period_in_sec
+        );
 
         return ();
     }
@@ -155,10 +164,12 @@ int get_param_value(int param) method_id {
 
 slice get_storage_contract_address(
     cell storage_contract_code, slice owner_address,
-    int torrent_hash, int file_size, int merkle_hash, int initial_storage_fee
+    int torrent_hash, int file_size, int merkle_hash, int initial_storage_fee,
+    int storage_period_in_sec, int max_storage_proof_span_in_sec
 ) method_id {
     cell state_init = build_storage_contract_stateinit(
-        storage_contract_code, torrent_hash, owner_address, merkle_hash, file_size, initial_storage_fee
+        storage_contract_code, torrent_hash, owner_address, merkle_hash, file_size,
+        initial_storage_fee, storage_period_in_sec, max_storage_proof_span_in_sec
     );
     slice storage_contract_address = calculate_storage_contract_address(state_init);
     return storage_contract_address;

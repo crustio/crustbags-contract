@@ -1,8 +1,10 @@
 import {
-    Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode, toNano
+    Address, beginCell, Cell, Contract, Dictionary, contractAddress, ContractProvider, Sender, SendMode, toNano,
+    Slice,
+    BitString
 } from '@ton/core';
 
-import { op_update_admin, op_place_storage_order } from './constants';
+import { op_update_admin, op_update_treasury, op_place_storage_order } from './constants';
 
 export type TonBagsContent = {
     type: 0 | 1;
@@ -18,13 +20,17 @@ export function tonBagsContentToCell(content: TonBagsContent) {
 
 export type TonBagsConfig = {
     adminAddress: Address;
+    treasuryAddress: Address;
     storageContractCode: Cell;
+    configParamsDict: Dictionary<BitString, Cell>;
 };
 
 export function tonBagsConfigToCell(config: TonBagsConfig): Cell {
     return beginCell()
         .storeAddress(config.adminAddress)
+        .storeAddress(config.treasuryAddress)
         .storeRef(config.storageContractCode)
+        .storeDict(config.configParamsDict)
         .endCell();
 }
 
@@ -57,18 +63,30 @@ export class TonBags implements Contract {
         });
     }
 
-    static updateAdminMessage(newOwner: Address) {
-        return beginCell()
-            .storeUint(op_update_admin, 32)  // op
-            .storeUint(0, 64) // queryId
-            .storeAddress(newOwner)
-            .endCell();
-    }
-
     async sendUpdateAdmin(provider: ContractProvider, via: Sender, newOwner: Address) {
+        const msg = beginCell()
+        .storeUint(op_update_admin, 32)  // op
+        .storeUint(0, 64) // queryId
+        .storeAddress(newOwner)
+        .endCell();
+
         await provider.internal(via, {
             sendMode: SendMode.PAY_GAS_SEPARATELY,
-            body: TonBags.updateAdminMessage(newOwner),
+            body: msg,
+            value: toNano('0.1'),
+        });
+    }
+
+    async sendUpdateTreasury(provider: ContractProvider, via: Sender, newTreasury: Address) {
+        const msg = beginCell()
+        .storeUint(op_update_treasury, 32)  // op
+        .storeUint(0, 64) // queryId
+        .storeAddress(newTreasury)
+        .endCell();
+
+        await provider.internal(via, {
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: msg,
             value: toNano('0.1'),
         });
     }
@@ -97,6 +115,11 @@ export class TonBags implements Contract {
 
     async getAdminAddress(provider: ContractProvider) {
         const result = await provider.get('get_admin_address', []);
+        return result.stack.readAddress();
+    }
+
+    async getTreasuryAddress(provider: ContractProvider) {
+        const result = await provider.get('get_treasury_address', []);
         return result.stack.readAddress();
     }
 

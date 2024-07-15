@@ -1,13 +1,15 @@
 const CHUNK_SIZE = 64;
 const int one_ton = 1000000000; ;;10^9
+
 const int min_storage_fee = one_ton / 10; ;; 0.1 TON minimal storage fee
-;; const int rate_per_mb_day = one_ton / 100; ;; 0.01 TON per 1 MB per day
 const int default_storage_period = 60 * 60 * 24 * 180; ;; 180 days
 const int max_storage_proof_span = 60 * 60; ;; 1 hour
+
 const int minimal_file_size = 1; ;; 1 byte
 const int maximal_file_size = 1024 * 1024 * 1024 * 10; ;; 10 GB
 
 const op::update_admin = "op::update_admin"c;
+const op::update_treasury = "op::update_treasury"c;
 const op::place_storage_order = "op::place_storage_order"c;
 const op::register_as_storage_provider = "op::register_as_storage_provider"c;
 const op::unregister_as_storage_provider = "op::unregister_as_storage_provider"c;

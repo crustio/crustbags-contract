@@ -1,5 +1,5 @@
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
-import { Address, Cell, Dictionary, beginCell, toNano, fromNano } from '@ton/core';
+import { Address, Cell, Dictionary, beginCell, toNano, fromNano, BitString } from '@ton/core';
 import { TonBags } from '../wrappers/TonBags';
 import { StorageContract } from '../wrappers/StorageContract';
 import '@ton/test-utils';
@@ -8,7 +8,7 @@ import {
     error_unauthorized, error_not_enough_storage_fee, error_duplicated_torrent_hash,
     error_file_too_small, error_file_too_large, error_storage_order_unexpired, error_unregistered_storage_provider,
     op_recycle_undistributed_storage_fees, op_unregister_as_storage_provider, op_submit_storage_proof,
-    op_register_as_storage_provider, op_claim_storage_rewards
+    op_register_as_storage_provider, op_claim_storage_rewards, op_update_treasury
 } from '../wrappers/constants';
 import { getMerkleRoot } from "./merkleProofUtils";
 import { ONE_HOUR_IN_SECS, expectBigNumberEquals, default_storage_period } from "./utils";
@@ -18,29 +18,35 @@ describe('TonBags', () => {
     let storageContractCode: Cell;
 
     let blockchain: Blockchain;
+    let Treasury: SandboxContract<TreasuryContract>;
     let Alice: SandboxContract<TreasuryContract>;
     let Bob: SandboxContract<TreasuryContract>;
     let Caro: SandboxContract<TreasuryContract>;
     let Dave: SandboxContract<TreasuryContract>;
     let Eva: SandboxContract<TreasuryContract>;
     let tonBags: SandboxContract<TonBags>;
+    let configParamsDict: Dictionary<BitString, Cell>;
 
     beforeAll(async () => {
         tonBagsCode = await compile('TonBags');
         storageContractCode = await compile('StorageContract');
 
         blockchain = await Blockchain.create();
+        Treasury = await blockchain.treasury('Treasury');
         Alice = await blockchain.treasury('Alice');
         Bob = await blockchain.treasury('Bob');
         Caro = await blockchain.treasury('Caro');
         Dave = await blockchain.treasury('Dave');
         Eva = await blockchain.treasury('Eva');
+        configParamsDict = Dictionary.empty();
 
         tonBags = blockchain.openContract(
             TonBags.createFromConfig(
                 {
                     adminAddress: Alice.address,
-                    storageContractCode
+                    treasuryAddress: Treasury.address,
+                    storageContractCode,
+                    configParamsDict
                 },
                 tonBagsCode
             )
@@ -87,6 +93,31 @@ describe('TonBags', () => {
             aborted: true,
             exitCode: error_unauthorized
         });
+    });
+
+    it('admin can update treasury and parameters', async () => {
+        expect(await tonBags.getAdminAddress()).toEqualAddress(Alice.address);
+        expect(await tonBags.getTreasuryAddress()).toEqualAddress(Treasury.address);
+
+        let newTreasury = await blockchain.treasury('New Treasury');
+
+        let trans = await tonBags.sendUpdateTreasury(Bob.getSender(), newTreasury.address);
+        expect(trans.transactions).toHaveTransaction({
+            from: Bob.address,
+            to: tonBags.address,
+            aborted: true,
+            exitCode: error_unauthorized
+        });
+        expect(await tonBags.getTreasuryAddress()).toEqualAddress(Treasury.address);
+
+        trans = await tonBags.sendUpdateTreasury(Alice.getSender(), newTreasury.address);
+        expect(trans.transactions).toHaveTransaction({
+            from: Alice.address,
+            to: tonBags.address,
+            op: op_update_treasury,
+            success: true
+        });
+        expect(await tonBags.getTreasuryAddress()).toEqualAddress(newTreasury.address);
     });
 
     it('anyone could place order to create a storage contract', async () => {

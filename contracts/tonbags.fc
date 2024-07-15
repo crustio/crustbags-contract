@@ -6,22 +6,26 @@
 
 {-
     storage#_
-        admin_address:MsgAddress storage_contract_code:^Cell = Storage;
+        admin_address:MsgAddress treasury_address:MsgAddress storage_contract_code:^Cell config_params_dict:^Cell = Storage;
 -}
-(slice, cell) load_data() inline {
+(slice, slice, cell, cell) load_data() inline {
     slice ds = get_data().begin_parse();
 
     var admin_address = ds~load_msg_addr();
+    var treasury_address = ds~load_msg_addr();
     var storage_contract_code = ds~load_ref();
+    var config_params_dict = ds~load_dict();
 
-    return (admin_address, storage_contract_code);
+    return (admin_address, treasury_address, storage_contract_code, config_params_dict);
 }
 
-() save_data(slice admin_address, cell storage_contract_code) impure inline {
+() save_data(slice admin_address, slice treasury_address, cell storage_contract_code, cell config_params_dict) impure inline {
     set_data(
         begin_cell()
             .store_slice(admin_address)
+            .store_slice(treasury_address)
             .store_ref(storage_contract_code)
+            .store_dict(config_params_dict)
             .end_cell()
     );
 }
@@ -70,12 +74,19 @@
     int op = in_msg_body~load_op();
     int query_id = in_msg_body~load_query_id();
 
-    (slice admin_address, cell storage_contract_code) = load_data();
+    (slice admin_address, slice treasury_address, cell storage_contract_code, cell config_params_dict) = load_data();
 
     if (op == op::update_admin) {
         throw_unless(error::unauthorized, equal_slice_bits(sender_address, admin_address));
         slice new_admin_address = in_msg_body~load_msg_addr();
-        save_data(new_admin_address, storage_contract_code);
+        save_data(new_admin_address, treasury_address, storage_contract_code, config_params_dict);
+        return ();
+    }
+
+    if (op == op::update_treasury) {
+        throw_unless(error::unauthorized, equal_slice_bits(sender_address, admin_address));
+        slice new_treasury_address = in_msg_body~load_msg_addr();
+        save_data(admin_address, new_treasury_address, storage_contract_code, config_params_dict);
         return ();
     }
 
@@ -97,8 +108,13 @@
 }
 
 slice get_admin_address() method_id {
-    (slice admin_address, cell storage_contract_code) = load_data();
+    (slice admin_address, slice treasury_address, cell storage_contract_code, cell config_params_dict) = load_data();
     return admin_address;
+}
+
+slice get_treasury_address() method_id {
+    (slice admin_address, slice treasury_address, cell storage_contract_code, cell config_params_dict) = load_data();
+    return treasury_address;
 }
 
 slice get_storage_contract_address(

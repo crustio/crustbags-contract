@@ -1,4 +1,5 @@
 export const op_update_admin = 0x8a3447f9;
+export const op_update_treasury = 0xf33714b2;
 export const op_place_storage_order = 0xa8055863;
 export const op_recycle_undistributed_storage_fees = 0x3c14cdbe;
 export const op_register_as_storage_provider = 0x1addc0dc;

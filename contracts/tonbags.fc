@@ -56,6 +56,8 @@ int get_config_param(int param, int default_value) inline {
     cell storage_contract_code, slice owner_address, int query_id,
     int torrent_hash, int file_size, int merkle_hash, int initial_storage_fee, int storage_period_in_sec
 ) impure {
+    var minimal_file_size = get_config_param(config::min_file_size_in_bytes, default_minimal_file_size_in_bytes);
+    var maximal_file_size = get_config_param(config::max_file_size_in_bytes, default_maximal_file_size_in_bytes);
     throw_unless(error::file_too_small, file_size >= minimal_file_size);
     throw_unless(error::file_too_large, file_size <= maximal_file_size);
 
@@ -69,7 +71,7 @@ int get_config_param(int param, int default_value) inline {
     );
     slice storage_contract_address = calculate_storage_contract_address(state_init);
 
-    ;; todo: what if there is already a contract at this address?
+    ;; what if there is already a contract at this address? can it be detected?
 
     cell master_msg = begin_cell().end_cell();
     var msg = begin_cell()
@@ -133,6 +135,7 @@ int get_config_param(int param, int default_value) inline {
         int total_storage_fee = in_msg_body~load_coins(); ;; VarUInteger 16
         int storage_period_in_sec = in_msg_body~load_uint(256);
 
+        var min_storage_fee = get_config_param(config::min_storage_fee, default_min_storage_fee);
         throw_unless(error::not_enough_storage_fee, total_storage_fee >= min_storage_fee);
         throw_unless(error::not_enough_storage_fee, msg_value >= total_storage_fee);
 

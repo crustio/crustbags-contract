@@ -9,7 +9,8 @@ import {
     error_file_too_small, error_file_too_large, error_storage_order_unexpired, error_unregistered_storage_provider,
     op_recycle_undistributed_storage_fees, op_unregister_as_storage_provider, op_submit_storage_proof, op_set_config_param,
     op_register_as_storage_provider, op_claim_storage_rewards, op_update_treasury, config_min_storage_period_in_sec,
-    config_max_storage_proof_span_in_sec
+    config_max_storage_proof_span_in_sec, error_too_short_storage_period,
+    op_place_storage_order
 } from '../wrappers/constants';
 import { getMerkleRoot } from "./merkleProofUtils";
 import { ONE_HOUR_IN_SECS, expectBigNumberEquals, default_storage_period, default_max_storage_proof_span } from "./utils";
@@ -28,7 +29,7 @@ describe('TonBags', () => {
     let tonBags: SandboxContract<TonBags>;
     let configParamsDict: Dictionary<bigint, Cell>;
 
-    beforeAll(async () => {
+    beforeEach(async () => {
         tonBagsCode = await compile('TonBags');
         storageContractCode = await compile('StorageContract');
 
@@ -59,6 +60,20 @@ describe('TonBags', () => {
             to: tonBags.address,
             deploy: true,
             success: true
+        });
+        let trans = await tonBags.sendSetConfigParam(Alice.getSender(), BigInt(config_min_storage_period_in_sec), 60n * 60n * 24n * 7n);
+        expect(trans.transactions).toHaveTransaction({
+            from: Alice.address,
+            to: tonBags.address,
+            op: op_set_config_param,
+            success: true,
+        });
+        trans = await tonBags.sendSetConfigParam(Alice.getSender(), BigInt(config_max_storage_proof_span_in_sec), 60n * 60n);
+        expect(trans.transactions).toHaveTransaction({
+            from: Alice.address,
+            to: tonBags.address,
+            op: op_set_config_param,
+            success: true,
         });
 
         // https://github.com/ton-org/sandbox?tab=readme-ov-file#viewing-logs
@@ -120,21 +135,21 @@ describe('TonBags', () => {
         });
         expect(await tonBags.getTreasuryAddress()).toEqualAddress(newTreasury.address);
 
-        trans = await tonBags.sendSetConfigParam(Bob.getSender(), BigInt(config_min_storage_period_in_sec), 60n * 60n * 24n * 7n);
+        trans = await tonBags.sendSetConfigParam(Bob.getSender(), BigInt(config_min_storage_period_in_sec), 60n * 60n * 24n * 1n);
         expect(trans.transactions).toHaveTransaction({
             from: Bob.address,
             to: tonBags.address,
             aborted: true,
             exitCode: error_unauthorized
         });
-        trans = await tonBags.sendSetConfigParam(Alice.getSender(), BigInt(config_min_storage_period_in_sec), 60n * 60n * 24n * 7n);
+        trans = await tonBags.sendSetConfigParam(Alice.getSender(), BigInt(config_min_storage_period_in_sec), 60n * 60n * 24n * 1n);
         expect(trans.transactions).toHaveTransaction({
             from: Alice.address,
             to: tonBags.address,
             op: op_set_config_param,
             success: true,
         });
-        expect(await tonBags.getConfigParam(BigInt(config_min_storage_period_in_sec))).toEqual(60n * 60n * 24n * 7n);
+        expect(await tonBags.getConfigParam(BigInt(config_min_storage_period_in_sec))).toEqual(60n * 60n * 24n * 1n);
     });
 
     it('anyone could place order to create a storage contract', async () => {
@@ -205,6 +220,77 @@ describe('TonBags', () => {
             success: false
         });
 
+    });
+
+    it('updated config params works for new storage contracts', async () => {
+        const dataArray = [ 0x0BAD0010n, 0x60A70020n, 0xBEEF0030n, 0xDEAD0040n, 0xCA110050n, 0x0E660060n, 0xFACE0070n, 0xBAD00080n, 0x060D0091n];
+        const merkleRoot = getMerkleRoot(dataArray);
+        const torrentHash = BigInt('0x876848C3350EA64ACCC09218917132998267F2ABC283097082FD41D511CAF11B');
+        const fileSize = 1024n * 1024n * 10n;  // 10MB
+
+        // Storage periods with 1/2 day does not work (< minimal 7 days)
+        let trans = await tonBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'), 60n * 60n * 24n / 2n);
+        expect(trans.transactions).toHaveTransaction({
+            from: Bob.address,
+            to: tonBags.address,
+            aborted: true,
+            exitCode: error_too_short_storage_period,
+            success: false
+        });
+
+        // Storage periods with 30 days works
+        let maxStorageProofSpan = await tonBags.getConfigParam(BigInt(config_max_storage_proof_span_in_sec));
+        trans = await tonBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'), 60n * 60n * 24n * 30n);
+        expect(trans.transactions).toHaveTransaction({
+            from: Bob.address,
+            to: tonBags.address,
+            op: op_place_storage_order,
+            success: true
+        });
+        let calStorageContractAddress = await tonBags.getStorageContractAddress(storageContractCode, Bob.address, torrentHash, fileSize, merkleRoot, toNano('1'), 60n * 60n * 24n * 30n, maxStorageProofSpan);
+        let storageContract = blockchain.openContract(
+            StorageContract.createFromAddress(
+                calStorageContractAddress
+            )
+        );
+        console.log(`Storage contract address: ${storageContract.address}, balance: ${fromNano(await storageContract.getBalance())}`);
+
+        // Placing storage orders with same parameters just double the balance
+        trans = await tonBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'), 60n * 60n * 24n * 30n);
+        expect(trans.transactions).toHaveTransaction({
+            from: Bob.address,
+            to: tonBags.address,
+            op: op_place_storage_order,
+            success: true
+        });
+        console.log(`Storage contract address: ${storageContract.address}, balance: ${fromNano(await storageContract.getBalance())}`);
+
+        // Check parameters
+        let [contractTorrentHash, ownerAddress, fileMerkleHash, fileSizeInBytes, storagePeriodInSec, maxStorageProofSpanInSec] = await storageContract.getOrderInfo();
+        expect(maxStorageProofSpanInSec).toEqual(maxStorageProofSpan);
+
+        // Update parameters
+        let newMaxStorageProofSpan = 60n * 60n / 2n;
+        trans = await tonBags.sendSetConfigParam(Alice.getSender(), BigInt(config_max_storage_proof_span_in_sec), newMaxStorageProofSpan);
+        expect(await tonBags.getConfigParam(BigInt(config_max_storage_proof_span_in_sec))).toEqual(newMaxStorageProofSpan);
+
+        // Deploy a new storage contract with updated parameters
+        trans = await tonBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'), 60n * 60n * 24n * 30n);
+        expect(trans.transactions).toHaveTransaction({
+            from: Bob.address,
+            to: tonBags.address,
+            op: op_place_storage_order,
+            success: true
+        });
+        let calStorageContractAddress2 = await tonBags.getStorageContractAddress(storageContractCode, Bob.address, torrentHash, fileSize, merkleRoot, toNano('1'), 60n * 60n * 24n * 30n, newMaxStorageProofSpan);
+        expect(calStorageContractAddress2).not.toEqual(calStorageContractAddress);
+        let storageContract2 = blockchain.openContract(
+            StorageContract.createFromAddress(
+                calStorageContractAddress2
+            )
+        );
+        [contractTorrentHash, ownerAddress, fileMerkleHash, fileSizeInBytes, storagePeriodInSec, maxStorageProofSpanInSec] = await storageContract2.getOrderInfo();
+        expect(maxStorageProofSpanInSec).toEqual(newMaxStorageProofSpan);
     });
 
     it('storage contract works', async () => {

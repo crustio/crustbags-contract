@@ -1,4 +1,5 @@
 
+export const config_min_storage_fee = 0x7bb75940;
 export const config_min_storage_period_in_sec = 0x2db7cc48;
 export const config_max_storage_proof_span_in_sec = 0x109258b9;
 export const config_min_file_size_in_bytes = 0x657d4db3;

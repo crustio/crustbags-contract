@@ -1,15 +1,21 @@
-import { toNano } from '@ton/core';
+import { Cell, Dictionary, toNano } from '@ton/core';
 import { TonBags } from '../wrappers/TonBags';
 import { compile, NetworkProvider } from '@ton/blueprint';
 
 export async function run(provider: NetworkProvider) {
+    const storageContractCode = await compile('StorageContract');
+    const tonBagCode = await compile('TonBags');
+    const configParamsDict: Dictionary<bigint, Cell> = Dictionary.empty();
+    const senderAddress = provider.sender().address!;
     const tonBags = provider.open(
         TonBags.createFromConfig(
             {
-                id: Math.floor(Math.random() * 10000),
-                counter: 0,
+                adminAddress: senderAddress,
+                treasuryAddress: senderAddress,
+                storageContractCode,
+                configParamsDict
             },
-            await compile('TonBags')
+            tonBagCode
         )
     );
 
@@ -17,5 +23,5 @@ export async function run(provider: NetworkProvider) {
 
     await provider.waitForDeploy(tonBags.address);
 
-    console.log('ID', await tonBags.getID());
+    console.log('address', tonBags.address.toString());
 }

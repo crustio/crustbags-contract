@@ -709,6 +709,9 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, cell file_dic
 }
 
 () recv_internal(int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    if (in_msg_body.slice_empty?()) { ;; ignore empty messages
+        return ();
+    }
     slice cs = in_msg_full.begin_parse();
     int flags = cs~load_uint(4);
 

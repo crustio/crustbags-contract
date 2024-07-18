@@ -1,4 +1,4 @@
-const CHUNK_SIZE = 64;
+;; const CHUNK_SIZE = 256;
 const int one_ton = 1000000000; ;;10^9
 
 const int default_storage_period = 60 * 60 * 24 * 180; ;; 180 days

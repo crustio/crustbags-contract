@@ -12,7 +12,7 @@ slice calculate_storage_contract_address(cell state_init) inline {
 cell build_storage_contract_stateinit(
     cell storage_contract_code,
     int torrent_hash, slice owner_address,
-    int file_merkle_hash, int file_size_in_bytes, int total_rewards,
+    int file_merkle_hash, int file_size_in_bytes, int chunk_size, int total_rewards,
     int storage_period_in_sec, int max_storage_proof_span_in_sec,
     slice treasury_address, int treasury_fee_rate
 ) {
@@ -25,6 +25,7 @@ cell build_storage_contract_stateinit(
             .store_slice(owner_address)
             .store_uint(file_merkle_hash, 256)
             .store_uint(file_size_in_bytes, 64)
+            .store_uint(chunk_size, 32)
             .store_uint(storage_period_in_sec, 64)
             .store_uint(max_storage_proof_span_in_sec, 64)
             .store_ref(treasury_info)

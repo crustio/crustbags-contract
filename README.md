@@ -31,7 +31,7 @@ $ yarn blueprint run deployTonBags --testnet --tonconnect
 ### Run script
 
 ```sh
-$ yarn blueprint run incrementTonBags --testnet --tonconnect
+$ yarn blueprint run placeOrderToTonBags --testnet --tonconnect
 ```
 
 ### Add a new contract
@@ -44,8 +44,8 @@ $ yarn blueprint create ContractName
 
 ### Testnet
 
-https://testnet.tonviewer.com/kQCpLkWpNOK4vjpueE-ETvTrJdEDFFcAf3uiVEn9WtTow1Iu
-https://testnet.tonscan.org/address/kQCpLkWpNOK4vjpueE-ETvTrJdEDFFcAf3uiVEn9WtTow1Iu
+https://testnet.tonviewer.com/kQD8ntXDohGn8GPVfxX5BF6zfgl7A_fks-8QoVcmKx5TE5M-
+https://testnet.tonscan.org/address/kQD8ntXDohGn8GPVfxX5BF6zfgl7A_fks-8QoVcmKx5TE5M-
 
 > For ton address translation, check https://ton.org/address
 > For testnet info, check https://docs.ton.org/develop/smart-contracts/environment/testnet

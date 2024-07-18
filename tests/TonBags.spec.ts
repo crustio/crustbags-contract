@@ -53,7 +53,7 @@ describe('TonBags', () => {
                 tonBagsCode
             )
         );
-        
+
         const deployResult = await tonBags.sendDeploy(Alice.getSender(), toNano('0.1'));
         expect(deployResult.transactions).toHaveTransaction({
             from: Alice.address,
@@ -230,7 +230,7 @@ describe('TonBags', () => {
     });
 
     it('updated config params works for new storage contracts', async () => {
-        const dataArray = [ 0x0BAD0010n, 0x60A70020n, 0xBEEF0030n, 0xDEAD0040n, 0xCA110050n, 0x0E660060n, 0xFACE0070n, 0xBAD00080n, 0x060D0091n];
+        const dataArray = [0x0BAD0010n, 0x60A70020n, 0xBEEF0030n, 0xDEAD0040n, 0xCA110050n, 0x0E660060n, 0xFACE0070n, 0xBAD00080n, 0x060D0091n];
         const merkleRoot = getMerkleRoot(dataArray);
         const torrentHash = BigInt('0x876848C3350EA64ACCC09218917132998267F2ABC283097082FD41D511CAF11B');
         const fileSize = 1024n * 1024n * 10n;  // 10MB
@@ -316,7 +316,7 @@ describe('TonBags', () => {
         console.log(fromNano(await tonBags.getBalance()));
         const tonBagsBalanceBeforeDeployStorageContract = await tonBags.getBalance();
 
-        const dataArray = [0x0BAD0010n, 0x60A70020n, 0xBEEF0030n, 0xDEAD0040n, 0xCA110050n, 0x0E660060n, 0xFACE0070n, 0xBAD00080n, 0x060D0091n ];
+        const dataArray = [0x0BAD0010n, 0x60A70020n, 0xBEEF0030n, 0xDEAD0040n, 0xCA110050n, 0x0E660060n, 0xFACE0070n, 0xBAD00080n, 0x060D0091n];
         const merkleRoot = getMerkleRoot(dataArray);
         const someInvalidMerkleRoot = merkleRoot - 1n;
         const torrentHash = BigInt('0x676848C3350EA64ACCC09218917132998267F2ABC283097082FD41D511CAF11B');
@@ -324,9 +324,9 @@ describe('TonBags', () => {
         // Distribute 43.2 $TON over 180 days. Workers must submit their report at most every 1 hour
         // 1 day rewards: 43.2 / 180 = 0.24 $TON
         // 1 hour rewards: 0.24 / 24 = 0.01
-        const totalStorageFee = toNano('43.2');
-
-        let trans = await tonBags.sendPlaceStorageOrder(Dave.getSender(), torrentHash, fileSize, merkleRoot, totalStorageFee, default_storage_period);
+        const totalStorageFee = toNano('86.4');
+        const newStoragePeriodInSec = default_storage_period * 2n;
+        let trans = await tonBags.sendPlaceStorageOrder(Dave.getSender(), torrentHash, fileSize, merkleRoot, totalStorageFee, newStoragePeriodInSec);
         expect(trans.transactions).toHaveTransaction({
             from: Dave.address,
             to: tonBags.address,
@@ -336,7 +336,7 @@ describe('TonBags', () => {
         // console.log('maxStorageProofSpan: ', maxStorageProofSpan);
         const storageFeeRate = await tonBags.getConfigParam(BigInt(config_treasury_fee_rate));
         const calStorageContractAddress = await tonBags.getStorageContractAddress(
-            storageContractCode, Dave.address, torrentHash, fileSize, merkleRoot, totalStorageFee, default_storage_period, default_max_storage_proof_span,
+            storageContractCode, Dave.address, torrentHash, fileSize, merkleRoot, totalStorageFee, newStoragePeriodInSec, default_max_storage_proof_span,
             Treasury.address, storageFeeRate
         );
         // expect(await tonBags.getStorageContractAddress(torrentHash)).not.toBeNull();
@@ -355,7 +355,7 @@ describe('TonBags', () => {
         expect(ownerAddress).toEqualAddress(Dave.address);
         expect(fileMerkleHash).toEqual(merkleRoot);
         expect(fileSizeInBytes).toEqual(fileSize);
-        expect(storagePeriodInSec).toEqual(default_storage_period);
+        expect(storagePeriodInSec).toEqual(newStoragePeriodInSec);
         expect(maxStorageProofSpanInSec).toEqual(default_max_storage_proof_span);
         expect(await storageContract.getEarned(Alice.address)).toEqual(0n);
 
@@ -416,14 +416,14 @@ describe('TonBags', () => {
             success: true
         });
         expect(await storageContract.getStarted()).toEqual(true);
-        expectBigNumberEquals(await storageContract.getPeriodFinish(), BigInt(genesisTime) + default_storage_period);
+        expectBigNumberEquals(await storageContract.getPeriodFinish(), BigInt(genesisTime) + newStoragePeriodInSec);
         expect(await storageContract.getTotalStorageProviders()).toEqual(1n);
 
         // Total rewards: 0.1 $TON per day
         // Alice Timeline: 
         //       Genesis Time (Joined)
         //       + 1 hour (Submit valid report => 1 hour rewards => claimed) 
-        let totalRewardsPerHour = totalStorageFee / 180n / 24n;
+        let totalRewardsPerHour = totalStorageFee / 180n / 24n / 2n;
         console.log("totalRewardsPerHour: ", totalRewardsPerHour);
         console.log(`Hour 1: Alice submits a valid report`);
         blockchain.now += ONE_HOUR_IN_SECS - 1;

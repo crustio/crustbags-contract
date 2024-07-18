@@ -501,12 +501,16 @@ int per_sec_total_rewards_pending_settle_for_provider(slice provider_address) in
         started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
         per_sec_per_provider_total_rewards_settled_scaled, period_finish, last_settle_time
     ) = load_rewards_params();
+    var (
+        torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes, storage_period_in_sec, max_storage_proof_span_in_sec,
+        treasury_address, treasury_fee_rate
+    ) = load_order_info();
     if ((~ started) & first_worker) {
         ~strdump("register_as_provider(), first_worker");
         started = 1;
-        total_rewards_per_sec_scaled = total_rewards * (SCALE) / default_storage_period;
+        total_rewards_per_sec_scaled = total_rewards * (SCALE) / storage_period_in_sec;
         last_settle_time = now();
-        period_finish = now() + default_storage_period;
+        period_finish = now() + storage_period_in_sec;
     }
 
     total_storage_providers += 1;
@@ -517,11 +521,6 @@ int per_sec_total_rewards_pending_settle_for_provider(slice provider_address) in
 
     storage_providers_dict~udict_set_ref(256, provider_addr, begin_cell().store_uint(1, 1).end_cell());
     save_storage_providers_dict(storage_providers_dict);
-
-    var (
-        torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes, storage_period_in_sec, max_storage_proof_span_in_sec,
-        treasury_address, treasury_fee_rate
-    ) = load_order_info();
     throw_unless(error::invalid_storage_provider, ~ equal_slice_bits(provider_address, owner_address));
     var next_proof = rand(file_size_in_bytes);
     var storage_provider_next_proofs_dict = load_storage_provider_next_proofs();

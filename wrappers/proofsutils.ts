@@ -33,92 +33,114 @@ export function proofsIntoBody(body: Builder, datas: bigint[]) {
         }
     }
 }
-
-export function hash(value: bigint) {
-    return BigInt('0x' + beginCell().storeUint(value, 256).endCell().hash(0).toString('hex'));
+// for ton contract
+export function cellHash(value: bigint) {
+    const hash = beginCell().storeUint(value, 256).endCell().hash(0).toString('hex');
+    return BigInt('0x' + hash);
 }
 
-export function abToBn(data: ArrayBuffer) {
-    return BigInt('0x' + Buffer.from(data).toString('hex'));
-}
-
-export function abHash(data: ArrayBuffer) {
-    return hash(abToBn(data));
-}
-
-export function hashs(a: bigint, b: bigint) {
-    return hash(a ^ b);
-}
-
-export type ProofTreeNode = {
-    value: bigint;
-    left?: ProofTreeNode;
-    right?: ProofTreeNode;
+export type MerkleTreeOpt<T> = {
+    // chunk data convert result size < 32byte(256bit)
+    dataConvert: (data: Buffer) => T;
+    // data hash
+    dataHash: (data: T, index: number) => T;
+    // hash up
+    hashUp: (a: T, b: T) => T;
+    chunkSize: number;
 };
 
-export const CHUNK_SIZE = 256;
+export const defOpt: MerkleTreeOpt<bigint> = {
+    dataConvert: (data) => BigInt('0x' + (data.byteLength > 32 ? sha256(data) : data.toString('hex'))),
+    dataHash: (data, index) => cellHash(data ^ BigInt(index)),
+    hashUp: (a, b) => cellHash(a ^ b),
+    chunkSize: 32,
+};
+export class MerkleTree<T = bigint> {
+    opt: MerkleTreeOpt<T>;
+    tree?: T[];
+    constructor(opt?: Partial<MerkleTreeOpt<T>>) {
+        this.opt = {
+            ...(defOpt as any),
+            ...opt,
+        };
+    }
 
-const hasRemaining = async () => {
-    if (typeof requestIdleCallback == 'undefined') return;
-    while (true) {
-        const has = await new Promise<boolean>((resolve) => {
-            requestIdleCallback((t) => {
-                resolve(t.timeRemaining() > 1);
+    hasRemaining = async () => {
+        if (typeof requestIdleCallback == 'undefined') return;
+        while (true) {
+            const has = await new Promise<boolean>((resolve) => {
+                requestIdleCallback((t) => {
+                    resolve(t.timeRemaining() > 1);
+                });
             });
-        });
-        if (has) return;
-    }
-};
-
-const readAsBn = async (file: File | Blob, start: number, end: number) => {
-    if (start >= file.size) return 0n;
-    const ab = await file.slice(start, end).arrayBuffer();
-    const bn = BigInt('0x' + sha256(ab));
-    return bn;
-};
-
-export function calcChunkSize(filesize: bigint | number) {
-    const size = typeof filesize !== 'bigint' ? BigInt(filesize) : filesize;
-    const count = 128n;
-    const chunk = size % count == 0n ? size / count : size / count + 1n;
-    return chunk >= 64n ? chunk : 64n;
-}
-
-export async function genProofsTree(file: File | Blob) {
-    const chunkSize = parseInt(calcChunkSize(file.size).toString());
-    const nodes: bigint[] = new Array(Math.ceil(file.size / chunkSize));
-    let offset = 0;
-    let index = 0;
-    while (true) {
-        await hasRemaining();
-        const value = await readAsBn(file, offset, offset + chunkSize);
-        nodes[index] = hash(value ^ BigInt(index));
-        index += 1;
-        offset = offset + chunkSize;
-        if (offset >= file.size) {
-            break;
+            if (has) return;
         }
-    }
-    const tree: bigint[] = new Array(2 * nodes.length - 1);
-    for (let i = 0; i < nodes.length; i++) {
-        tree[tree.length - 1 - i] = nodes[i];
-    }
-    for (let i = tree.length - 1 - nodes.length; i >= 0; i--) {
-        tree[i] = hashs(tree[2 * i + 1]!, tree[2 * i + 2]!);
-    }
-    return tree;
-}
+    };
 
-export async function getProofs(file: File | Blob, tree: bigint[], i: number) {
-    const chunkSize = parseInt(calcChunkSize(file.size).toString());
-    // console.info('tree', tree.length, tree[0]);
-    const offset = i * chunkSize;
-    const data = await readAsBn(file, offset, offset + chunkSize);
-    i = tree.length - 1 - i; // tree index
-    const proof: bigint[] = [];
-    while (i > 0) {
-        proof.push(tree[i - (-1) ** (i % 2)]);
-        i = Math.floor((i - 1) / 2);
+    async genTree(file: Blob | File) {
+        const chunkSize = this.opt.chunkSize;
+        const nodes: T[] = new Array(Math.ceil(file.size / chunkSize));
+        let offset = 0;
+        let index = 0;
+        while (true) {
+            await this.hasRemaining();
+            const readCount = Math.min(
+                Math.ceil((file.size - offset) / chunkSize),
+                Math.ceil((1024 * 256) / chunkSize),
+            );
+            const ab = await file.slice(offset, offset + chunkSize * readCount).arrayBuffer();
+            for (let readI = 0; readI < readCount; readI++) {
+                const item = Buffer.from(ab, readI * chunkSize, Math.min(ab.byteLength - readI * chunkSize, chunkSize));
+                const nodeI = readI + index;
+                nodes[nodeI] = this.opt.dataHash(this.opt.dataConvert(item), nodeI);
+            }
+            index += readCount;
+            offset = offset + readCount * chunkSize;
+            if (offset >= file.size) {
+                break;
+            }
+        }
+        const tree: T[] = new Array(2 * nodes.length - 1);
+        for (let i = 0; i < nodes.length; i++) {
+            tree[tree.length - 1 - i] = nodes[i];
+        }
+        for (let i = tree.length - 1 - nodes.length; i >= 0; i--) {
+            tree[i] = this.opt.hashUp(tree[2 * i + 1]!, tree[2 * i + 2]!);
+        }
+        this.tree = tree;
+        return tree;
     }
-    return [data, ...proof];
+
+    getProofs(i: number) {
+        if (!this.tree) throw 'Not found tree';
+        i = this.tree.length - 1 - i; // tree index
+        const proof: T[] = [];
+        while (i > 0) {
+            proof.push(this.tree[i - (-1) ** (i % 2)]);
+            i = Math.floor((i - 1) / 2);
+        }
+        return proof;
+    }
+    async getDataAndProofs(file: Blob | File, i: number) {
+        const proofs = this.getProofs(i);
+        const chunkSize = this.opt.chunkSize;
+        const data = await file.slice(i * chunkSize, i * chunkSize + chunkSize).arrayBuffer();
+        const first = this.opt.dataConvert(Buffer.from(data));
+        return [first, ...proofs];
+    }
+
+    verify(dataAndProofs: T[], i: number, root: T) {
+        if (dataAndProofs.length < 2) {
+            throw 'proofs error';
+        }
+        let tempHash: T = 0n as T;
+        dataAndProofs.forEach((item, index) => {
+            if (index) {
+                tempHash = this.opt.hashUp(tempHash, item);
+            } else {
+                tempHash = this.opt.dataHash(item, i);
+            }
+        });
+        return tempHash == root;
+    }
 }

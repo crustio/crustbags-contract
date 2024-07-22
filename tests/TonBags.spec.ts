@@ -14,9 +14,19 @@ import {
 } from '../wrappers/constants';
 import { getMerkleRoot } from "./merkleProofUtils";
 import { ONE_HOUR_IN_SECS, expectBigNumberEquals, default_storage_period, default_max_storage_proof_span } from "./utils";
-import { openAsBlob } from 'fs';
+import { createReadStream } from 'fs';
 import path from 'path';
 import { MerkleTree } from '../wrappers/proofsutils';
+
+const readAsBlob = async (file: string) => { 
+    // return openAsBlob(file);
+    return new Promise<Blob>((resolve, reject) => {
+        let chunks: Buffer[] = []
+        createReadStream(file).on('error', reject).on('data', (data: Buffer) => {
+            chunks.push(data)
+        }).on('end', () => resolve(new Blob(chunks)));
+    });
+};
 
 describe('TonBags', () => {
     let tonBagsCode: Cell;
@@ -163,7 +173,7 @@ describe('TonBags', () => {
     });
 
     it('anyone could place order to create a storage contract', async () => {
-        const file = await openAsBlob(path.join(__dirname,'/.files/test.zip'));
+        const file = await readAsBlob(path.join(__dirname,'/.files/test.zip'));
         const fileSize = BigInt(file.size);
         const mt = new MerkleTree()
         const [merkleRoot] = await mt.genTree(file);
@@ -312,7 +322,7 @@ describe('TonBags', () => {
         console.log(fromNano(await tonBags.getBalance()));
         const tonBagsBalanceBeforeDeployStorageContract = await tonBags.getBalance();
 
-        const file = await openAsBlob(path.join(__dirname,'/.files/test.zip'));
+        const file = await readAsBlob(path.join(__dirname,'/.files/test.zip'));
         const fileSize = BigInt(file.size);
         const mt =  new MerkleTree()
         const tree = await mt.genTree(file);

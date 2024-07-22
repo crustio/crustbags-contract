@@ -54,7 +54,7 @@ int get_config_param(int param, int default_value) inline {
 
 () deploy_storage_contract(
     cell storage_contract_code, slice owner_address, int query_id,
-    int torrent_hash, int file_size, int merkle_hash, int initial_storage_fee, int storage_period_in_sec
+    int torrent_hash, int file_size, int merkle_hash, int chunk_size, int initial_storage_fee, int storage_period_in_sec
 ) impure {
     var minimal_file_size = get_config_param(config::min_file_size_in_bytes, default_minimal_file_size_in_bytes);
     var maximal_file_size = get_config_param(config::max_file_size_in_bytes, default_maximal_file_size_in_bytes);
@@ -72,7 +72,7 @@ int get_config_param(int param, int default_value) inline {
         treasury_fee_rate = max_treasury_fee_rate;
     }
     cell state_init = build_storage_contract_stateinit(
-        storage_contract_code, torrent_hash, owner_address, merkle_hash, file_size, 
+        storage_contract_code, torrent_hash, owner_address, merkle_hash, file_size, chunk_size,
         initial_storage_fee, storage_period_in_sec, max_storage_proof_span_in_sec,
         treasury_address, treasury_fee_rate
     );
@@ -139,6 +139,7 @@ int get_config_param(int param, int default_value) inline {
         int torrent_hash = in_msg_body~load_uint(256);
         int file_size = in_msg_body~load_uint(64);
         int merkle_hash = in_msg_body~load_uint(256);
+        int chunk_size = in_msg_body~load_uint(32);
         int total_storage_fee = in_msg_body~load_coins(); ;; VarUInteger 16
         int storage_period_in_sec = in_msg_body~load_uint(256);
 
@@ -148,7 +149,7 @@ int get_config_param(int param, int default_value) inline {
 
         deploy_storage_contract(
             storage_contract_code, sender_address, query_id, torrent_hash,
-            file_size, merkle_hash, total_storage_fee, storage_period_in_sec
+            file_size, merkle_hash, chunk_size, total_storage_fee, storage_period_in_sec
         );
 
         return ();
@@ -174,12 +175,12 @@ int get_param_value(int param) method_id {
 
 slice get_storage_contract_address(
     cell storage_contract_code, slice owner_address,
-    int torrent_hash, int file_size, int merkle_hash, int initial_storage_fee,
+    int torrent_hash, int file_size, int merkle_hash, int chunk_size, int initial_storage_fee,
     int storage_period_in_sec, int max_storage_proof_span_in_sec,
     slice treasury_address, int treasury_fee_rate
 ) method_id {
     cell state_init = build_storage_contract_stateinit(
-        storage_contract_code, torrent_hash, owner_address, merkle_hash, file_size,
+        storage_contract_code, torrent_hash, owner_address, merkle_hash, file_size, chunk_size,
         initial_storage_fee, storage_period_in_sec, max_storage_proof_span_in_sec,
         treasury_address, treasury_fee_rate
     );

@@ -13,6 +13,7 @@ import {
   op_recycle_undistributed_storage_fees, op_unregister_as_storage_provider, op_submit_storage_proof,
   op_register_as_storage_provider, op_claim_storage_rewards
 } from './constants';
+import { proofsIntoBody } from './proofsutils';
 
 export type StorageContractConfig = {};
 
@@ -55,13 +56,14 @@ export class StorageContract implements Contract {
       const ownerAddress = result.stack.readAddress();
       const fileMerkleHash = result.stack.readBigNumber();
       const fileSizeInBytes = result.stack.readBigNumber();
+      const chunkSize = result.stack.readBigNumber();
       const storagePeriodInSec = result.stack.readBigNumber();
       const maxStorageProofSpanInSec = result.stack.readBigNumber();
       const treasuryAddress = result.stack.readAddress();
       const treasuryFeeRate = result.stack.readBigNumber();
 
       return [
-        torrentHash, ownerAddress, fileMerkleHash, fileSizeInBytes, storagePeriodInSec, maxStorageProofSpanInSec, treasuryAddress, treasuryFeeRate
+        torrentHash, ownerAddress, fileMerkleHash, fileSizeInBytes, storagePeriodInSec, maxStorageProofSpanInSec, treasuryAddress, treasuryFeeRate,chunkSize
       ];
   }
 
@@ -152,17 +154,16 @@ export class StorageContract implements Contract {
   }
 
   async sendSubmitStorageProof(
-    provider: ContractProvider, via: Sender, merkleRoot: bigint
+    provider: ContractProvider, via: Sender, proofs: bigint[]
   ) {
       const messsage = beginCell()
           .storeUint(op_submit_storage_proof, 32) // op
           .storeUint(0, 64) // queryId
-          .storeRef(beginCell().storeUint(merkleRoot, 256).endCell())
-          .endCell();
-
+          ;
+      proofsIntoBody(messsage, proofs);
       await provider.internal(via, {
           sendMode: SendMode.PAY_GAS_SEPARATELY,
-          body: messsage,
+          body: messsage.endCell(),
           value: toNano('0.1'),
       });
   }

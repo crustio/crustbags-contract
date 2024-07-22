@@ -5,6 +5,7 @@ import {
 } from '@ton/core';
 
 import { op_update_admin, op_update_treasury, op_set_config_param, op_place_storage_order } from './constants';
+import { defOpt } from './proofsutils';
 
 export type TonBagsContent = {
     type: 0 | 1;
@@ -106,13 +107,14 @@ export class TonBags implements Contract {
         });
     }
 
-    static placeStorageOrderMessage(torrentHash: bigint, fileSize: bigint, merkleHash: bigint, totalStorageFee: bigint, storagePeriodInSec: bigint) {
+    static placeStorageOrderMessage(torrentHash: bigint, fileSize: bigint, merkleHash: bigint, chunkSize: bigint, totalStorageFee: bigint, storagePeriodInSec: bigint) {
         return beginCell()
             .storeUint(op_place_storage_order, 32)  // op
             .storeUint(0, 64) // queryId
             .storeUint(torrentHash, 256)
             .storeUint(fileSize, 64)
             .storeUint(merkleHash, 256)
+            .storeUint(chunkSize, 32)
             .storeCoins(totalStorageFee)
             .storeUint(storagePeriodInSec, 256)
             .endCell();;
@@ -124,7 +126,7 @@ export class TonBags implements Contract {
     ) {
         await provider.internal(via, {
             sendMode: SendMode.PAY_GAS_SEPARATELY,
-            body: TonBags.placeStorageOrderMessage(torrentHash, fileSize, merkleHash, totalStorageFee, storagePeriodInSec),
+            body: TonBags.placeStorageOrderMessage(torrentHash, fileSize, merkleHash, BigInt(defOpt.chunkSize), totalStorageFee, storagePeriodInSec),
             value: totalStorageFee + toNano('0.1'),
         });
     }
@@ -155,12 +157,14 @@ export class TonBags implements Contract {
         storagePeriodInSec: bigint, maxStorageProofSpanInSec: bigint,
         treasuryAddress: Address, treasuryFeeRate: bigint
     ) {
+        
         const result = await provider.get('get_storage_contract_address', [
             {type: 'cell', cell: storageContractCode},
             {type: 'slice', cell: beginCell().storeAddress(ownerAddress).endCell()},
             {type: 'int', value: torrentHash},
             {type: 'int', value: fileSize},
             {type: 'int', value: merkleHash},
+            {type: 'int', value: BigInt(defOpt.chunkSize)},
             {type: 'int', value: initialStorageFee},
             {type: 'int', value: storagePeriodInSec},
             {type: 'int', value: maxStorageProofSpanInSec},

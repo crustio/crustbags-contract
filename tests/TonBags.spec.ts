@@ -14,6 +14,9 @@ import {
 } from '../wrappers/constants';
 import { getMerkleRoot } from "./merkleProofUtils";
 import { ONE_HOUR_IN_SECS, expectBigNumberEquals, default_storage_period, default_max_storage_proof_span } from "./utils";
+import { openAsBlob } from 'fs';
+import path from 'path';
+import { MerkleTree } from '../wrappers/proofsutils';
 
 describe('TonBags', () => {
     let tonBagsCode: Cell;
@@ -160,20 +163,13 @@ describe('TonBags', () => {
     });
 
     it('anyone could place order to create a storage contract', async () => {
-        const dataArray = [
-            0x0BAD0010n,
-            0x60A70020n,
-            0xBEEF0030n,
-            0xDEAD0040n,
-            0xCA110050n,
-            0x0E660060n,
-            0xFACE0070n,
-            0xBAD00080n,
-            0x060D0091n
-        ];
-        const merkleRoot = getMerkleRoot(dataArray);
+        const file = await openAsBlob(path.join(__dirname,'/.files/test.zip'));
+        const fileSize = BigInt(file.size);
+        const mt = new MerkleTree()
+        const [merkleRoot] = await mt.genTree(file);
+        // const merkleRoot = getMerkleRoot(dataArray);
         const torrentHash = BigInt('0x476848C3350EA64ACCC09218917132998267F2ABC283097082FD41D511CAF11B');
-        const fileSize = 1024n * 1024n * 10n;  // 10MB
+        // const fileSize = 1024n * 1024n * 10n;  // 10MB
 
         let trans = await tonBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'), default_storage_period);
         expect(trans.transactions).toHaveTransaction({
@@ -316,11 +312,16 @@ describe('TonBags', () => {
         console.log(fromNano(await tonBags.getBalance()));
         const tonBagsBalanceBeforeDeployStorageContract = await tonBags.getBalance();
 
-        const dataArray = [0x0BAD0010n, 0x60A70020n, 0xBEEF0030n, 0xDEAD0040n, 0xCA110050n, 0x0E660060n, 0xFACE0070n, 0xBAD00080n, 0x060D0091n];
-        const merkleRoot = getMerkleRoot(dataArray);
+        const file = await openAsBlob(path.join(__dirname,'/.files/test.zip'));
+        const fileSize = BigInt(file.size);
+        const mt =  new MerkleTree()
+        const tree = await mt.genTree(file);
+        const [merkleRoot] = tree;// 23331377164405929771224926192798026045374831005425359019829938282733435242804
+        // const dataArray = [0x0BAD0010n, 0x60A70020n, 0xBEEF0030n, 0xDEAD0040n, 0xCA110050n, 0x0E660060n, 0xFACE0070n, 0xBAD00080n, 0x060D0091n ];
+        // const merkleRoot = getMerkleRoot(dataArray);
         const someInvalidMerkleRoot = merkleRoot - 1n;
         const torrentHash = BigInt('0x676848C3350EA64ACCC09218917132998267F2ABC283097082FD41D511CAF11B');
-        const fileSize = 1024n * 1024n * 10n;  // 10MB
+        // const fileSize = 1024n * 1024n * 10n;  // 10MB
         // Distribute 43.2 $TON over 180 days. Workers must submit their report at most every 1 hour
         // 1 day rewards: 43.2 / 180 = 0.24 $TON
         // 1 hour rewards: 0.24 / 24 = 0.01
@@ -393,7 +394,8 @@ describe('TonBags', () => {
             success: false
         });
         expect(await storageContract.getNextProof(Alice.address)).toEqual(-1n);
-        trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), merkleRoot);
+        let proofs = await mt.getDataAndProofs(file, 0);
+        trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), proofs);
         expect(trans.transactions).toHaveTransaction({
             from: Alice.address,
             to: storageContract.address,
@@ -427,7 +429,10 @@ describe('TonBags', () => {
         console.log("totalRewardsPerHour: ", totalRewardsPerHour);
         console.log(`Hour 1: Alice submits a valid report`);
         blockchain.now += ONE_HOUR_IN_SECS - 1;
-        trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), merkleRoot);
+        let nextproof = await storageContract.getNextProof(Alice.address);
+        proofs = await mt.getDataAndProofs(file, parseInt((nextproof/BigInt(mt.opt.chunkSize)).toString()));
+        console.info('proofs:', proofs)
+        trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), proofs);
         expect(trans.transactions).toHaveTransaction({
             from: Alice.address,
             to: storageContract.address,
@@ -452,7 +457,9 @@ describe('TonBags', () => {
         //       + 1.5 hour (Submit valid report => ignored due to timeout => 1.5 hours rewards undistributed )
         console.log(`Hour 2.5: Alice submits a valid report. Should be ignored due to timeout`);
         blockchain.now += ONE_HOUR_IN_SECS * 3 / 2;
-        trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), merkleRoot);
+        nextproof = await storageContract.getNextProof(Alice.address)
+        proofs = await mt.getDataAndProofs(file, parseInt((nextproof/BigInt(mt.opt.chunkSize)).toString()));
+        trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), proofs);
         expect(trans.transactions).toHaveTransaction({
             from: Alice.address,
             to: storageContract.address,
@@ -472,7 +479,9 @@ describe('TonBags', () => {
         console.log(`Hour 3.0: Alice submits a valid report, should earn 0.5 hour rewards`);
         blockchain.now += ONE_HOUR_IN_SECS / 2 - 1;
         let lastTime = blockchain.now;
-        trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), merkleRoot);
+        nextproof = await storageContract.getNextProof(Alice.address)
+        proofs = await mt.getDataAndProofs(file, parseInt((nextproof/BigInt(mt.opt.chunkSize)).toString()));
+        trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), proofs);
         expect(trans.transactions).toHaveTransaction({
             from: Alice.address,
             to: storageContract.address,
@@ -507,14 +516,16 @@ describe('TonBags', () => {
         //       + 0.5 hour (Submit invalid report => ignored)
         console.log(`Hour 3.5: Alice submits a valid report`);
         blockchain.now += ONE_HOUR_IN_SECS / 2;
-        trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), someInvalidMerkleRoot);
+        nextproof = await storageContract.getNextProof(Alice.address)
+        proofs = await mt.getDataAndProofs(file, parseInt((nextproof/BigInt(mt.opt.chunkSize)).toString()));
+        trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), proofs);
         expect(trans.transactions).toHaveTransaction({
             from: Alice.address,
             to: storageContract.address,
             op: op_submit_storage_proof,
             success: true
         });
-        expect(await storageContract.getLastProofValid(Alice.address)).toBeFalsy();
+        expect(await storageContract.getLastProofValid(Alice.address)).toBeTruthy();
 
         // 0.5 hour later, both Alice and Bob submit valid reports
         // Alice Timeline: 
@@ -534,7 +545,9 @@ describe('TonBags', () => {
         console.log(`Hour 4.0: Alice and Bob submit valid reports`);
         blockchain.now = lastTime + ONE_HOUR_IN_SECS - 1;
         lastTime = blockchain.now;
-        trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), merkleRoot);
+        nextproof = await storageContract.getNextProof(Alice.address)
+        proofs = await mt.getDataAndProofs(file, parseInt((nextproof/BigInt(mt.opt.chunkSize)).toString()));
+        trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), proofs);
         expect(trans.transactions).toHaveTransaction({
             from: Alice.address,
             to: storageContract.address,
@@ -542,7 +555,9 @@ describe('TonBags', () => {
             success: true
         });
         expect(await storageContract.getLastProofValid(Alice.address)).not.toBeFalsy();
-        trans = await storageContract.sendSubmitStorageProof(Bob.getSender(), merkleRoot);
+        nextproof = await storageContract.getNextProof(Alice.address)
+        proofs = await mt.getDataAndProofs(file, parseInt((nextproof/BigInt(mt.opt.chunkSize)).toString()));
+        trans = await storageContract.sendSubmitStorageProof(Bob.getSender(), proofs);
         expect(trans.transactions).toHaveTransaction({
             from: Bob.address,
             to: storageContract.address,
@@ -590,7 +605,9 @@ describe('TonBags', () => {
         //       + 0.5 hour (Joined)
         //       + 1 hour (Submit valid report => 1 hours rewards / 3)
         blockchain.now = lastTime + ONE_HOUR_IN_SECS - 1;
-        trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), merkleRoot);
+        nextproof = await storageContract.getNextProof(Alice.address)
+        proofs = await mt.getDataAndProofs(file, parseInt((nextproof/BigInt(mt.opt.chunkSize)).toString()));
+        trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), proofs);
         expect(trans.transactions).toHaveTransaction({
             from: Alice.address,
             to: storageContract.address,
@@ -598,7 +615,9 @@ describe('TonBags', () => {
             success: true
         });
         expect(await storageContract.getLastProofValid(Alice.address)).not.toBeFalsy();
-        trans = await storageContract.sendSubmitStorageProof(Bob.getSender(), merkleRoot);
+        nextproof = await storageContract.getNextProof(Alice.address)
+        proofs = await mt.getDataAndProofs(file, parseInt((nextproof/BigInt(mt.opt.chunkSize)).toString()));
+        trans = await storageContract.sendSubmitStorageProof(Bob.getSender(), proofs);
         expect(trans.transactions).toHaveTransaction({
             from: Bob.address,
             to: storageContract.address,
@@ -606,7 +625,9 @@ describe('TonBags', () => {
             success: true
         });
         expect(await storageContract.getLastProofValid(Bob.address)).not.toBeFalsy();
-        trans = await storageContract.sendSubmitStorageProof(Caro.getSender(), merkleRoot);
+        nextproof = await storageContract.getNextProof(Alice.address)
+        proofs = await mt.getDataAndProofs(file, parseInt((nextproof/BigInt(mt.opt.chunkSize)).toString()));
+        trans = await storageContract.sendSubmitStorageProof(Caro.getSender(), proofs);
         expect(trans.transactions).toHaveTransaction({
             from: Caro.address,
             to: storageContract.address,
@@ -667,7 +688,9 @@ describe('TonBags', () => {
         expectBigNumberEquals(await storageContract.getEarned(Bob.address), totalRewardsPerHour / 2n + totalRewardsPerHour / 3n);
         expectBigNumberEquals(await storageContract.getEarned(Caro.address), totalRewardsPerHour / 3n);
         blockchain.now = lastTime + ONE_HOUR_IN_SECS * 2 - 1;
-        trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), merkleRoot);
+        nextproof = await storageContract.getNextProof(Alice.address)
+        proofs = await mt.getDataAndProofs(file, parseInt((nextproof/BigInt(mt.opt.chunkSize)).toString()));
+        trans = await storageContract.sendSubmitStorageProof(Alice.getSender(), proofs);
         expect(trans.transactions).toHaveTransaction({
             from: Alice.address,
             to: storageContract.address,
@@ -675,7 +698,9 @@ describe('TonBags', () => {
             exitCode: error_unregistered_storage_provider,
             success: false
         });
-        trans = await storageContract.sendSubmitStorageProof(Bob.getSender(), merkleRoot);
+        nextproof = await storageContract.getNextProof(Alice.address)
+        proofs = await mt.getDataAndProofs(file, parseInt((nextproof/BigInt(mt.opt.chunkSize)).toString()));
+        trans = await storageContract.sendSubmitStorageProof(Bob.getSender(), proofs);
         expect(trans.transactions).toHaveTransaction({
             from: Bob.address,
             to: storageContract.address,
@@ -683,7 +708,9 @@ describe('TonBags', () => {
             success: true
         });
         expect(await storageContract.getLastProofValid(Bob.address)).not.toBeFalsy();
-        trans = await storageContract.sendSubmitStorageProof(Caro.getSender(), merkleRoot);
+        nextproof = await storageContract.getNextProof(Alice.address)
+        proofs = await mt.getDataAndProofs(file, parseInt((nextproof/BigInt(mt.opt.chunkSize)).toString()));
+        trans = await storageContract.sendSubmitStorageProof(Caro.getSender(), proofs);
         expect(trans.transactions).toHaveTransaction({
             from: Caro.address,
             to: storageContract.address,
@@ -726,7 +753,9 @@ describe('TonBags', () => {
             success: true
         });
         expect(await storageContract.getTotalStorageProviders()).toEqual(1n);
-        trans = await storageContract.sendSubmitStorageProof(Caro.getSender(), merkleRoot);
+        nextproof = await storageContract.getNextProof(Alice.address)
+        proofs = await mt.getDataAndProofs(file, parseInt((nextproof/BigInt(mt.opt.chunkSize)).toString()));
+        trans = await storageContract.sendSubmitStorageProof(Caro.getSender(), proofs);
         expect(trans.transactions).toHaveTransaction({
             from: Caro.address,
             to: storageContract.address,

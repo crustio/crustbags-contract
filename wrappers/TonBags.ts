@@ -1,10 +1,10 @@
 import {
-    Address, beginCell, Cell, Contract, Dictionary, contractAddress, ContractProvider, Sender, SendMode, toNano,
-    Slice,
-    BitString
+    Address, beginCell, Cell, Contract, Dictionary, contractAddress, ContractProvider, Sender, SendMode, toNano
 } from '@ton/core';
-
-import { op_update_admin, op_update_treasury, op_set_config_param, op_place_storage_order } from './constants';
+import {
+    op_update_admin, op_update_treasury, op_set_config_param,
+    op_place_storage_order, op_upgrade, op_update_storage_contract_code
+} from './constants';
 import { defOpt } from './proofsutils';
 
 export type TonBagsContent = {
@@ -64,6 +64,20 @@ export class TonBags implements Contract {
         });
     }
 
+    async sendUpgrade(provider: ContractProvider, via: Sender, newCode: Cell) {
+        const msg = beginCell()
+        .storeUint(op_upgrade, 32)  // op
+        .storeUint(0, 64) // queryId
+        .storeRef(newCode)
+        .endCell();
+
+        await provider.internal(via, {
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: msg,
+            value: toNano('0.1'),
+        });
+    }
+
     async sendUpdateAdmin(provider: ContractProvider, via: Sender, newOwner: Address) {
         const msg = beginCell()
         .storeUint(op_update_admin, 32)  // op
@@ -83,6 +97,20 @@ export class TonBags implements Contract {
         .storeUint(op_update_treasury, 32)  // op
         .storeUint(0, 64) // queryId
         .storeAddress(newTreasury)
+        .endCell();
+
+        await provider.internal(via, {
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: msg,
+            value: toNano('0.1'),
+        });
+    }
+
+    async sendUpdateStorageContractCode(provider: ContractProvider, via: Sender, newCode: Cell) {
+        const msg = beginCell()
+        .storeUint(op_update_storage_contract_code, 32)  // op
+        .storeUint(0, 64) // queryId
+        .storeRef(newCode)
         .endCell();
 
         await provider.internal(via, {

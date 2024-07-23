@@ -112,6 +112,13 @@ int get_config_param(int param, int default_value) inline {
 
     (slice admin_address, slice treasury_address, cell storage_contract_code, cell config_params_dict) = load_data();
 
+    if (op == op::upgrade) {
+        throw_unless(error::unauthorized, equal_slice_bits(sender_address, admin_address));
+        cell code = in_msg_body~load_ref();
+        set_code(code);
+        return ();
+    }
+
     if (op == op::update_admin) {
         throw_unless(error::unauthorized, equal_slice_bits(sender_address, admin_address));
         slice new_admin_address = in_msg_body~load_msg_addr();
@@ -123,6 +130,13 @@ int get_config_param(int param, int default_value) inline {
         throw_unless(error::unauthorized, equal_slice_bits(sender_address, admin_address));
         slice new_treasury_address = in_msg_body~load_msg_addr();
         save_data(admin_address, new_treasury_address, storage_contract_code, config_params_dict);
+        return ();
+    }
+
+    if (op == op::update_storage_contract_code) {
+        throw_unless(error::unauthorized, equal_slice_bits(sender_address, admin_address));
+        cell new_storage_contract_code = in_msg_body~load_ref();
+        save_data(admin_address, treasury_address, new_storage_contract_code, config_params_dict);
         return ();
     }
 

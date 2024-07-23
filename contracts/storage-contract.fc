@@ -684,7 +684,6 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, int chunk_siz
     if (hash != merkle_hash) {
         return 0;
     }
-    ;; todo: implement merkle tree proof verification
     return 1;
 }
 

@@ -1,16 +1,20 @@
+import '@ton/test-utils';
+import { compile } from '@ton/blueprint';
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
 import { Address, Cell, Dictionary, beginCell, toNano, fromNano } from '@ton/core';
 import { TonBags } from '../wrappers/TonBags';
 import { StorageContract } from '../wrappers/StorageContract';
-import '@ton/test-utils';
-import { compile } from '@ton/blueprint';
+import { TonBagsV2 } from '../wrappers/tests/TonBagsV2';
+import { StorageContractV2 } from '../wrappers/tests/StorageContractV2';
 import {
     error_unauthorized, error_not_enough_storage_fee, error_duplicated_torrent_hash,
     error_file_too_small, error_file_too_large, error_storage_order_unexpired, error_unregistered_storage_provider,
     op_recycle_undistributed_storage_fees, op_unregister_as_storage_provider, op_submit_storage_proof, op_set_config_param,
     op_register_as_storage_provider, op_claim_storage_rewards, op_update_treasury, config_min_storage_period_in_sec,
     config_max_storage_proof_span_in_sec, error_too_short_storage_period, config_treasury_fee_rate,
-    op_place_storage_order
+    op_place_storage_order,
+    op_upgrade,
+    op_update_storage_contract_code
 } from '../wrappers/constants';
 import { getMerkleRoot } from "./merkleProofUtils";
 import { ONE_HOUR_IN_SECS, expectBigNumberEquals, default_storage_period, default_max_storage_proof_span } from "./utils";
@@ -108,6 +112,56 @@ describe('TonBags', () => {
     it('should deploy', async () => {
         // the check is done inside beforeEach
         // blockchain and tonBags are ready to use
+    });
+
+    it('tonbags should be upgradable', async () => {
+        const tonBagsCodeV2 = await compile('tests/TonBagsV2');
+        const storageContractCodeV2 = await compile('tests/StorageContractV2');
+
+        expect(await tonBags.getAdminAddress()).toEqualAddress(Alice.address);
+
+        let trans = await tonBags.sendUpdateStorageContractCode(Bob.getSender(), storageContractCodeV2);
+        expect(trans.transactions).toHaveTransaction({
+            from: Bob.address,
+            to: tonBags.address,
+            aborted: true,
+            exitCode: error_unauthorized
+        });
+        trans = await tonBags.sendUpdateStorageContractCode(Alice.getSender(), storageContractCodeV2);
+        expect(trans.transactions).toHaveTransaction({
+            from: Alice.address,
+            to: tonBags.address,
+            op: op_update_storage_contract_code,
+            success: true,
+        });
+
+        trans = await tonBags.sendUpgrade(Bob.getSender(), tonBagsCodeV2);
+        expect(trans.transactions).toHaveTransaction({
+            from: Bob.address,
+            to: tonBags.address,
+            aborted: true,
+            exitCode: error_unauthorized
+        });
+        trans = await tonBags.sendUpgrade(Alice.getSender(), tonBagsCodeV2);
+        expect(trans.transactions).toHaveTransaction({
+            from: Alice.address,
+            to: tonBags.address,
+            op: op_upgrade,
+            success: true,
+        });
+
+        const tonBagsV2 = blockchain.openContract(
+            TonBagsV2.createFromConfig(
+                {
+                    adminAddress: Alice.address,
+                    treasuryAddress: Treasury.address,
+                    storageContractCode,
+                    configParamsDict
+                },
+                tonBagsCode
+            )
+        );
+        expect(await tonBagsV2.getSomeMethodV2()).toEqual("Hello, TonBags V2!");
     });
 
     it('minter admin can change admin', async () => {

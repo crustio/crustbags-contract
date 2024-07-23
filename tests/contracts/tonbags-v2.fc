@@ -1,0 +1,8 @@
+
+() recv_internal(int msg_value, cell in_msg_full, slice in_msg_body) impure {
+
+}
+
+slice some_method_v2() method_id {
+    return "Hello, TonBags V2!";
+}

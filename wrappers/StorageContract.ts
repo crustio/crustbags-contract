@@ -112,6 +112,13 @@ export class StorageContract implements Contract {
     return result.stack.readBigNumber();
   }
 
+  async getIsStorageProviderWhitelisted(provider: ContractProvider, providerAddress: Address) {
+    const result = await provider.get('get_is_storage_provider_white_listed', [
+        { type: 'slice', cell: beginCell().storeAddress(providerAddress).endCell() },
+    ]);
+    return result.stack.readBigNumber();
+  }
+
   async sendRecycleUndistributedStorageFees(
       provider: ContractProvider, via: Sender
   ) {

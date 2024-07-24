@@ -1,3 +1,5 @@
+export const default_storage_period = 60n * 60n * 24n * 180n;
+export const default_max_storage_proof_span = 60n * 60n * 24n;
 export const default_max_storage_providers_per_order = 30n;
 
 export const config_min_storage_fee = 0x7bb75940;
@@ -19,6 +21,8 @@ export const op_register_as_storage_provider = 0x1addc0dc;
 export const op_unregister_as_storage_provider = 0x401a6169;
 export const op_submit_storage_proof = 0x1055bfcc;
 export const op_claim_storage_rewards = 0xd6b37a4b;
+export const op_add_storage_provider_to_white_list = 0xd9d13623;
+export const op_remove_storage_provider_from_white_list = 0xbd51af76;
 
 export const error_unauthorized = 401;
 export const error_not_enough_storage_fee = 1001;
@@ -31,3 +35,5 @@ export const error_invalid_storage_proof = 1007;
 export const error_unregistered_storage_provider = 1008;
 export const error_storage_order_unexpired = 1009;
 export const error_invalid_storage_provider = 1010;
+export const error_too_large_treasury_fee_rate = 1011;
+export const error_max_storage_providers_per_order_exceeded = 1012;

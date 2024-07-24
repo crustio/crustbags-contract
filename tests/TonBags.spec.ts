@@ -5,17 +5,18 @@ import { Address, Cell, Dictionary, beginCell, toNano, fromNano } from '@ton/cor
 import { TonBags } from '../wrappers/TonBags';
 import { StorageContract } from '../wrappers/StorageContract';
 import { TonBagsV2 } from '../wrappers/tests/TonBagsV2';
-import { StorageContractV2 } from '../wrappers/tests/StorageContractV2';
 import {
     error_unauthorized, error_not_enough_storage_fee, error_duplicated_torrent_hash,
     error_file_too_small, error_file_too_large, error_storage_order_unexpired, error_unregistered_storage_provider,
     op_recycle_undistributed_storage_fees, op_unregister_as_storage_provider, op_submit_storage_proof, op_set_config_param,
     op_register_as_storage_provider, op_claim_storage_rewards, op_update_treasury, config_min_storage_period_in_sec,
     config_max_storage_proof_span_in_sec, error_too_short_storage_period, config_treasury_fee_rate, config_max_storage_providers_per_order,
-    op_place_storage_order, op_upgrade, op_update_storage_contract_code, default_max_storage_providers_per_order
+    op_place_storage_order, op_upgrade, op_update_storage_contract_code, default_max_storage_providers_per_order,
+    default_max_storage_proof_span, default_storage_period,
+    op_add_storage_provider_to_white_list, error_max_storage_providers_per_order_exceeded
 } from '../wrappers/constants';
 import { getMerkleRoot } from "./merkleProofUtils";
-import { ONE_HOUR_IN_SECS, expectBigNumberEquals, default_storage_period, default_max_storage_proof_span } from "./utils";
+import { ONE_HOUR_IN_SECS, expectBigNumberEquals } from "./utils";
 import { createReadStream } from 'fs';
 import path from 'path';
 import { MerkleTree } from '../wrappers/proofsutils';
@@ -347,10 +348,32 @@ describe('TonBags', () => {
         ] = await storageContract.getOrderInfo();
         expect(maxStorageProofSpanInSec).toEqual(maxStorageProofSpan);
 
+        // Check whitelist
+        expect(await storageContract.getIsStorageProviderWhitelisted(Alice.address)).toBeFalsy();
+
         // Update parameters
         let newMaxStorageProofSpan = 60n * 60n / 2n;
         trans = await tonBags.sendSetConfigParam(Alice.getSender(), BigInt(config_max_storage_proof_span_in_sec), newMaxStorageProofSpan);
         expect(await tonBags.getConfigParam(BigInt(config_max_storage_proof_span_in_sec), 0n)).toEqual(newMaxStorageProofSpan);
+
+        // Add Alice to whitelist
+        trans = await tonBags.sendAddStorageProviderToWhitelist(Bob.getSender(), Alice.address);
+        expect(trans.transactions).toHaveTransaction({
+            from: Bob.address,
+            to: tonBags.address,
+            aborted: true,
+            exitCode: error_unauthorized
+        });
+        trans = await tonBags.sendAddStorageProviderToWhitelist(Alice.getSender(), Alice.address);
+        expect(trans.transactions).toHaveTransaction({
+            from: Alice.address,
+            to: tonBags.address,
+            op: op_add_storage_provider_to_white_list,
+            success: true
+        });
+        expect(await storageContract.getIsStorageProviderWhitelisted(Alice.address)).toBeFalsy();
+        // console.log(`Alice white listed: ${await tonBags.getIsStorageProviderWhitelisted(Alice.address)}`);
+        expect(await tonBags.getIsStorageProviderWhitelisted(Alice.address)).toBeTruthy();
 
         // Deploy a new storage contract with updated parameters
         trans = await tonBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'), 60n * 60n * 24n * 30n);
@@ -376,10 +399,18 @@ describe('TonBags', () => {
             contractTorrentHash, ownerAddress, fileMerkleHash, fileSizeInBytes, storagePeriodInSec, maxStorageProofSpanInSec,
             treasuryAddress, treasuryFeeRate, maxStorageProvidersPerOrder, storageProviderWhitelistDict
         ] = await storageContract2.getOrderInfo();
+        expect(await storageContract2.getIsStorageProviderWhitelisted(Alice.address)).toBeTruthy();
         expect(maxStorageProofSpanInSec).toEqual(newMaxStorageProofSpan);
     });
 
     it('storage contract works', async () => {
+        // Set default_max_storage_providers_per_order to 3
+        let trans = await tonBags.sendSetConfigParam(Alice.getSender(), BigInt(config_max_storage_providers_per_order), 3n);
+
+        // Add Caro & Eva to whitelist
+        trans = await tonBags.sendAddStorageProviderToWhitelist(Alice.getSender(), Caro.address);
+        trans = await tonBags.sendAddStorageProviderToWhitelist(Alice.getSender(), Eva.address);
+
         console.log(fromNano(await tonBags.getBalance()));
         const tonBagsBalanceBeforeDeployStorageContract = await tonBags.getBalance();
 
@@ -398,7 +429,7 @@ describe('TonBags', () => {
         // 1 hour rewards: 0.24 / 24 = 0.01
         const totalStorageFee = toNano('86.4');
         const newStoragePeriodInSec = default_storage_period * 2n;
-        let trans = await tonBags.sendPlaceStorageOrder(Dave.getSender(), torrentHash, fileSize, merkleRoot, totalStorageFee, newStoragePeriodInSec);
+        trans = await tonBags.sendPlaceStorageOrder(Dave.getSender(), torrentHash, fileSize, merkleRoot, totalStorageFee, newStoragePeriodInSec);
         expect(trans.transactions).toHaveTransaction({
             from: Dave.address,
             to: tonBags.address,
@@ -629,7 +660,7 @@ describe('TonBags', () => {
             success: true
         });
         expect(await storageContract.getLastProofValid(Alice.address)).not.toBeFalsy();
-        nextproof = await storageContract.getNextProof(Alice.address)
+        nextproof = await storageContract.getNextProof(Bob.address)
         proofs = await mt.getDataAndProofs(file, parseInt((nextproof/BigInt(mt.opt.chunkSize)).toString()));
         trans = await storageContract.sendSubmitStorageProof(Bob.getSender(), proofs);
         expect(trans.transactions).toHaveTransaction({
@@ -653,7 +684,17 @@ describe('TonBags', () => {
         });
         expect(await storageContract.getTotalStorageProviders()).toEqual(3n);
 
-        // 1 hour later (within), Alice, Bob, Call, all submit valid reports. They share the rewards
+        // Eva could not join
+        trans = await storageContract.sendRegisterAsStorageProvider(Eva.getSender());
+        expect(trans.transactions).toHaveTransaction({
+            from: Eva.address,
+            to: storageContract.address,
+            aborted: true,
+            exitCode: error_max_storage_providers_per_order_exceeded,
+            success: false
+        });
+
+        // 1 hour later (within), Alice, Bob, Caro, all submit valid reports. They share the rewards
         // Alice Timeline: 
         //       Genesis Time (Joined)
         //       + 1 hour (Submit valid report => 1 hour rewards) 
@@ -689,7 +730,7 @@ describe('TonBags', () => {
             success: true
         });
         expect(await storageContract.getLastProofValid(Alice.address)).not.toBeFalsy();
-        nextproof = await storageContract.getNextProof(Alice.address)
+        nextproof = await storageContract.getNextProof(Bob.address)
         proofs = await mt.getDataAndProofs(file, parseInt((nextproof/BigInt(mt.opt.chunkSize)).toString()));
         trans = await storageContract.sendSubmitStorageProof(Bob.getSender(), proofs);
         expect(trans.transactions).toHaveTransaction({
@@ -699,7 +740,7 @@ describe('TonBags', () => {
             success: true
         });
         expect(await storageContract.getLastProofValid(Bob.address)).not.toBeFalsy();
-        nextproof = await storageContract.getNextProof(Alice.address)
+        nextproof = await storageContract.getNextProof(Caro.address)
         proofs = await mt.getDataAndProofs(file, parseInt((nextproof/BigInt(mt.opt.chunkSize)).toString()));
         trans = await storageContract.sendSubmitStorageProof(Caro.getSender(), proofs);
         expect(trans.transactions).toHaveTransaction({
@@ -772,7 +813,7 @@ describe('TonBags', () => {
             exitCode: error_unregistered_storage_provider,
             success: false
         });
-        nextproof = await storageContract.getNextProof(Alice.address)
+        nextproof = await storageContract.getNextProof(Bob.address)
         proofs = await mt.getDataAndProofs(file, parseInt((nextproof/BigInt(mt.opt.chunkSize)).toString()));
         trans = await storageContract.sendSubmitStorageProof(Bob.getSender(), proofs);
         expect(trans.transactions).toHaveTransaction({
@@ -782,7 +823,7 @@ describe('TonBags', () => {
             success: true
         });
         expect(await storageContract.getLastProofValid(Bob.address)).not.toBeFalsy();
-        nextproof = await storageContract.getNextProof(Alice.address)
+        nextproof = await storageContract.getNextProof(Caro.address)
         proofs = await mt.getDataAndProofs(file, parseInt((nextproof/BigInt(mt.opt.chunkSize)).toString()));
         trans = await storageContract.sendSubmitStorageProof(Caro.getSender(), proofs);
         expect(trans.transactions).toHaveTransaction({
@@ -827,8 +868,10 @@ describe('TonBags', () => {
             success: true
         });
         expect(await storageContract.getTotalStorageProviders()).toEqual(1n);
-        nextproof = await storageContract.getNextProof(Alice.address)
-        proofs = await mt.getDataAndProofs(file, parseInt((nextproof/BigInt(mt.opt.chunkSize)).toString()));
+        // nextproof = await storageContract.getNextProof(Caro.address)
+        // proofs = await mt.getDataAndProofs(file, parseInt((nextproof/BigInt(mt.opt.chunkSize)).toString()));
+        // Note: Caro is on the white list, so any proofs she submits is considerred valid
+        proofs = [];
         trans = await storageContract.sendSubmitStorageProof(Caro.getSender(), proofs);
         expect(trans.transactions).toHaveTransaction({
             from: Caro.address,
@@ -842,6 +885,29 @@ describe('TonBags', () => {
 
         let exactRewardsOfCaro = await storageContract.getEarned(Caro.address);
         undistributedRewards = await storageContract.getUndistributedRewards();
+
+        // Eva now could join
+        trans = await storageContract.sendRegisterAsStorageProvider(Eva.getSender());
+        expect(trans.transactions).toHaveTransaction({
+            from: Eva.address,
+            to: storageContract.address,
+            op: op_register_as_storage_provider,
+            success: true
+        });
+        expect(await storageContract.getTotalStorageProviders()).toEqual(2n);
+
+        // 3 hours later, Eva sumits any report, and gets (totalRewardsPerHour / 2n * 3) rewards. Since he is on the white list.
+        blockchain.now = lastTime + ONE_HOUR_IN_SECS * 6 - 1;
+        proofs = [];
+        trans = await storageContract.sendSubmitStorageProof(Eva.getSender(), proofs);
+        expect(trans.transactions).toHaveTransaction({
+            from: Eva.address,
+            to: storageContract.address,
+            op: op_submit_storage_proof,
+            success: true
+        });
+        expect(await storageContract.getLastProofValid(Eva.address)).not.toBeFalsy();
+        expectBigNumberEquals(await storageContract.getEarned(Eva.address), totalRewardsPerHour / 2n * 3n);
 
         // Fast forward to the end
         blockchain.now = await Number(await storageContract.getPeriodFinish()) + 1;

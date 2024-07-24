@@ -734,9 +734,9 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, int chunk_siz
         treasury_address, treasury_fee_rate, max_storage_providers_per_order, storage_provider_white_list_dict
     ) = load_order_info();
 
-    var in_report_window = 0;
-    if (is_white_listed) {
-        in_report_window = 1;
+    var in_report_window = false;
+    if (is_white_listed == 1) {
+        in_report_window = true; ;; -1
     }
     else {
         in_report_window = (now() - last_work_report_time) <= max_storage_proof_span_in_sec;
@@ -816,7 +816,7 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, int chunk_siz
             treasury_address, treasury_fee_rate, max_storage_providers_per_order, storage_provider_white_list_dict
         ) = load_order_info();
 
-        var is_white_listed = is_storage_provider_white_listed(sender_address);
+        var is_white_listed = is_storage_provider_white_listed(sender_address);  ;; 0 or 1
         var valid = 0;
         if (is_white_listed) {
             valid = 1;
@@ -925,4 +925,8 @@ int get_next_proof(slice provider_address) method_id {
     var ds = val.begin_parse();
     var next_proof = ds~load_uint(64);
     return next_proof;
+}
+
+int get_is_storage_provider_white_listed(slice storage_provider_address) method_id {
+    return is_storage_provider_white_listed(storage_provider_address);
 }

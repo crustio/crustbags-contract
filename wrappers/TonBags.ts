@@ -3,7 +3,8 @@ import {
 } from '@ton/core';
 import {
     op_update_admin, op_update_treasury, op_set_config_param,
-    op_place_storage_order, op_upgrade, op_update_storage_contract_code
+    op_place_storage_order, op_upgrade, op_update_storage_contract_code,
+    op_add_storage_provider_to_white_list, op_remove_storage_provider_from_white_list
 } from './constants';
 import { defOpt } from './proofsutils';
 
@@ -56,6 +57,13 @@ export class TonBags implements Contract {
     async getBalance(provider: ContractProvider) {
         const { balance } = await provider.getState();
         return balance;
+    }
+
+    async getIsStorageProviderWhitelisted(provider: ContractProvider, providerAddress: Address) {
+        const result = await provider.get('is_storage_provider_white_listed', [
+            { type: 'slice', cell: beginCell().storeAddress(providerAddress).endCell() },
+        ]);
+        return result.stack.readBigNumber();
     }
 
     async sendDeploy(provider: ContractProvider, via: Sender, value: bigint) {
@@ -128,6 +136,34 @@ export class TonBags implements Contract {
         .storeUint(0, 64) // queryId
         .storeUint(param, 256)
         .storeUint(value, 64)
+        .endCell();
+
+        await provider.internal(via, {
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: msg,
+            value: toNano('0.1'),
+        });
+    }
+
+    async sendAddStorageProviderToWhitelist(provider: ContractProvider, via: Sender, storageProvider: Address) {
+        const msg = beginCell()
+        .storeUint(op_add_storage_provider_to_white_list, 32)  // op
+        .storeUint(0, 64) // queryId
+        .storeAddress(storageProvider)
+        .endCell();
+
+        await provider.internal(via, {
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: msg,
+            value: toNano('0.1'),
+        });
+    }
+
+    async sendRemoveStorageProviderFromWhitelist(provider: ContractProvider, via: Sender, storageProvider: Address) {
+        const msg = beginCell()
+        .storeUint(op_remove_storage_provider_from_white_list, 32)  // op
+        .storeUint(0, 64) // queryId
+        .storeAddress(storageProvider)
         .endCell();
 
         await provider.internal(via, {

@@ -1,3 +1,4 @@
+export const default_max_storage_providers_per_order = 30n;
 
 export const config_min_storage_fee = 0x7bb75940;
 export const config_min_storage_period_in_sec = 0x2db7cc48;
@@ -5,6 +6,7 @@ export const config_max_storage_proof_span_in_sec = 0x109258b9;
 export const config_min_file_size_in_bytes = 0x657d4db3;
 export const config_max_file_size_in_bytes = 0x246a7235;
 export const config_treasury_fee_rate  = 0x4e57453d;
+export const config_max_storage_providers_per_order = 0x72af131f;
 
 export const op_upgrade = 0xdbfaf817;
 export const op_update_admin = 0x8a3447f9;

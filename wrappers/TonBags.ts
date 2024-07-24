@@ -24,6 +24,7 @@ export type TonBagsConfig = {
     treasuryAddress: Address;
     storageContractCode: Cell;
     configParamsDict: Dictionary<bigint, Cell>;
+    storageProviderWhitelistDict: Dictionary<Address, Cell>;
 };
 
 export function tonBagsConfigToCell(config: TonBagsConfig): Cell {
@@ -32,6 +33,7 @@ export function tonBagsConfigToCell(config: TonBagsConfig): Cell {
         .storeAddress(config.treasuryAddress)
         .storeRef(config.storageContractCode)
         .storeDict(config.configParamsDict)
+        .storeDict(config.storageProviderWhitelistDict)
         .endCell();
 }
 
@@ -170,12 +172,18 @@ export class TonBags implements Contract {
     }
 
     async getConfigParam(
-        provider: ContractProvider, param: bigint
+        provider: ContractProvider, param: bigint, defaultVaule: bigint
     ) {
         const result = await provider.get('get_param_value', [
-            {type: 'int', value: param}
+            {type: 'int', value: param},
+            {type: 'int', value: defaultVaule}
         ]);
         return result.stack.readBigNumber();
+    }
+
+    async getStorageProviderWhitelistDict(provider: ContractProvider) {
+        const result = await provider.get('get_storage_provider_white_list_dict', []);
+        return result.stack.readCell();
     }
 
     async getStorageContractAddress(
@@ -183,7 +191,7 @@ export class TonBags implements Contract {
         storageContractCode: Cell, ownerAddress: Address,
         torrentHash: bigint, fileSize: bigint, merkleHash: bigint, initialStorageFee: bigint,
         storagePeriodInSec: bigint, maxStorageProofSpanInSec: bigint,
-        treasuryAddress: Address, treasuryFeeRate: bigint
+        treasuryAddress: Address, treasuryFeeRate: bigint, maxStorageProvidersPerOrder: bigint, storageProviderWhitelistDict: Cell
     ) {
         
         const result = await provider.get('get_storage_contract_address', [
@@ -197,7 +205,9 @@ export class TonBags implements Contract {
             {type: 'int', value: storagePeriodInSec},
             {type: 'int', value: maxStorageProofSpanInSec},
             {type: 'slice', cell: beginCell().storeAddress(treasuryAddress).endCell()},
-            {type: 'int', value: treasuryFeeRate}
+            {type: 'int', value: treasuryFeeRate},
+            {type: 'int', value: maxStorageProvidersPerOrder},
+            {type: 'cell', cell: storageProviderWhitelistDict},
         ]);
         return result.stack.readAddress();
     }

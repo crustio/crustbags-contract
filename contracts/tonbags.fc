@@ -6,26 +6,32 @@
 
 {-
     storage#_
-        admin_address:MsgAddress treasury_address:MsgAddress storage_contract_code:^Cell config_params_dict:^Cell = Storage;
+        admin_address:MsgAddress treasury_address:MsgAddress storage_contract_code:^Cell
+        config_params_dict:^Cell storage_provider_white_list_dict:^Cell = Storage;
 -}
-(slice, slice, cell, cell) load_data() inline {
+(slice, slice, cell, cell, cell) load_data() inline {
     slice ds = get_data().begin_parse();
 
     var admin_address = ds~load_msg_addr();
     var treasury_address = ds~load_msg_addr();
     var storage_contract_code = ds~load_ref();
     var config_params_dict = ds~load_dict();
+    var storage_provider_white_list_dict = ds~load_dict();
 
-    return (admin_address, treasury_address, storage_contract_code, config_params_dict);
+    return (admin_address, treasury_address, storage_contract_code, config_params_dict, storage_provider_white_list_dict);
 }
 
-() save_data(slice admin_address, slice treasury_address, cell storage_contract_code, cell config_params_dict) impure inline {
+() save_data(
+    slice admin_address, slice treasury_address, cell storage_contract_code,
+    cell config_params_dict, cell storage_provider_white_list_dict
+) impure inline {
     set_data(
         begin_cell()
             .store_slice(admin_address)
             .store_slice(treasury_address)
             .store_ref(storage_contract_code)
             .store_dict(config_params_dict)
+            .store_dict(storage_provider_white_list_dict)
             .end_cell()
     );
 }
@@ -33,7 +39,7 @@
 int get_config_param(int param, int default_value) inline {
     ;; ~strdump("get_config_param():");
     ;; ~dump(param);
-    (slice admin_address, slice treasury_address, cell storage_contract_code, cell config_params_dict) = load_data();
+    (slice admin_address, slice treasury_address, cell storage_contract_code, cell config_params_dict, cell storage_provider_white_list_dict) = load_data();
     var (val, found?) = config_params_dict.udict_get_ref?(256, param);
     if (~ found?) {
         return default_value;
@@ -47,9 +53,25 @@ int get_config_param(int param, int default_value) inline {
 () set_config_param(int param, int value) impure inline {
     ;; ~strdump("set_config_param(), param, value:");
     ;; ~dump([param, value]);
-    (slice admin_address, slice treasury_address, cell storage_contract_code, cell config_params_dict) = load_data();
+    (slice admin_address, slice treasury_address, cell storage_contract_code, cell config_params_dict, cell storage_provider_white_list_dict) = load_data();
     config_params_dict~udict_set_ref(256, param, begin_cell().store_uint(value, 64).end_cell());
-    save_data(admin_address, treasury_address, storage_contract_code, config_params_dict);
+    save_data(admin_address, treasury_address, storage_contract_code, config_params_dict, storage_provider_white_list_dict);
+}
+
+() add_storage_provider_to_white_list(slice storage_provider_address) inline {
+    (int wc, int storage_provider_addr) = parse_std_addr(storage_provider_address);
+
+    (slice admin_address, slice treasury_address, cell storage_contract_code, cell config_params_dict, cell storage_provider_white_list_dict) = load_data();
+    storage_provider_white_list_dict~udict_set_ref(256, storage_provider_addr, begin_cell().store_uint(1, 1).end_cell());
+    save_data(admin_address, treasury_address, storage_contract_code, config_params_dict, storage_provider_white_list_dict);
+}
+
+() remove_storage_provider_from_white_list(slice storage_provider_address) impure inline {
+    (int wc, int storage_provider_addr) = parse_std_addr(storage_provider_address);
+
+    (slice admin_address, slice treasury_address, cell storage_contract_code, cell config_params_dict, cell storage_provider_white_list_dict) = load_data();
+    storage_provider_white_list_dict~udict_set_ref(256, storage_provider_addr, begin_cell().store_uint(0, 1).end_cell());
+    save_data(admin_address, treasury_address, storage_contract_code, config_params_dict, storage_provider_white_list_dict);
 }
 
 () deploy_storage_contract(
@@ -64,17 +86,18 @@ int get_config_param(int param, int default_value) inline {
     var min_storage_period_in_sec = get_config_param(config::min_storage_period_in_sec, default_min_storage_period_in_sec);
     throw_unless(error::too_short_storage_period, storage_period_in_sec >= min_storage_period_in_sec);
 
-    var (admin_address, treasury_address, storage_contract_code, config_params_dict) = load_data();
+    var (admin_address, treasury_address, storage_contract_code, config_params_dict, storage_provider_white_list_dict) = load_data();
 
     var max_storage_proof_span_in_sec = get_config_param(config::max_storage_proof_span_in_sec, default_max_storage_proof_span);
     var treasury_fee_rate = get_config_param(config::treasury_fee_rate, 0);
     if (treasury_fee_rate > max_treasury_fee_rate) {
         treasury_fee_rate = max_treasury_fee_rate;
     }
+    var max_storage_providers_per_order = get_config_param(config::max_storage_providers_per_order, default_max_storage_providers_per_order);
     cell state_init = build_storage_contract_stateinit(
         storage_contract_code, torrent_hash, owner_address, merkle_hash, file_size, chunk_size,
         initial_storage_fee, storage_period_in_sec, max_storage_proof_span_in_sec,
-        treasury_address, treasury_fee_rate
+        treasury_address, treasury_fee_rate, max_storage_providers_per_order, storage_provider_white_list_dict
     );
     slice storage_contract_address = calculate_storage_contract_address(state_init);
 
@@ -110,7 +133,7 @@ int get_config_param(int param, int default_value) inline {
     int op = in_msg_body~load_op();
     int query_id = in_msg_body~load_query_id();
 
-    (slice admin_address, slice treasury_address, cell storage_contract_code, cell config_params_dict) = load_data();
+    (slice admin_address, slice treasury_address, cell storage_contract_code, cell config_params_dict, cell storage_provider_white_list_dict) = load_data();
 
     if (op == op::upgrade) {
         throw_unless(error::unauthorized, equal_slice_bits(sender_address, admin_address));
@@ -122,21 +145,21 @@ int get_config_param(int param, int default_value) inline {
     if (op == op::update_admin) {
         throw_unless(error::unauthorized, equal_slice_bits(sender_address, admin_address));
         slice new_admin_address = in_msg_body~load_msg_addr();
-        save_data(new_admin_address, treasury_address, storage_contract_code, config_params_dict);
+        save_data(new_admin_address, treasury_address, storage_contract_code, config_params_dict, storage_provider_white_list_dict);
         return ();
     }
 
     if (op == op::update_treasury) {
         throw_unless(error::unauthorized, equal_slice_bits(sender_address, admin_address));
         slice new_treasury_address = in_msg_body~load_msg_addr();
-        save_data(admin_address, new_treasury_address, storage_contract_code, config_params_dict);
+        save_data(admin_address, new_treasury_address, storage_contract_code, config_params_dict, storage_provider_white_list_dict);
         return ();
     }
 
     if (op == op::update_storage_contract_code) {
         throw_unless(error::unauthorized, equal_slice_bits(sender_address, admin_address));
         cell new_storage_contract_code = in_msg_body~load_ref();
-        save_data(admin_address, treasury_address, new_storage_contract_code, config_params_dict);
+        save_data(admin_address, treasury_address, new_storage_contract_code, config_params_dict, storage_provider_white_list_dict);
         return ();
     }
 
@@ -146,6 +169,20 @@ int get_config_param(int param, int default_value) inline {
         int param = in_msg_body~load_uint(256);
         int value = in_msg_body~load_uint(64);
         set_config_param(param, value);
+        return ();
+    }
+
+    if (op == op::add_storage_provider_to_white_list) {
+        throw_unless(error::unauthorized, equal_slice_bits(sender_address, admin_address));
+        slice storage_provider_address = in_msg_body~load_msg_addr();
+        add_storage_provider_to_white_list(storage_provider_address);
+        return ();
+    }
+
+    if (op == op::remove_storage_provider_from_white_list) {
+        throw_unless(error::unauthorized, equal_slice_bits(sender_address, admin_address));
+        slice storage_provider_address = in_msg_body~load_msg_addr();
+        remove_storage_provider_from_white_list(storage_provider_address);
         return ();
     }
 
@@ -173,17 +210,17 @@ int get_config_param(int param, int default_value) inline {
 }
 
 slice get_admin_address() method_id {
-    (slice admin_address, slice treasury_address, cell storage_contract_code, cell config_params_dict) = load_data();
+    (slice admin_address, slice treasury_address, cell storage_contract_code, cell config_params_dict, cell storage_provider_white_list_dict) = load_data();
     return admin_address;
 }
 
 slice get_treasury_address() method_id {
-    (slice admin_address, slice treasury_address, cell storage_contract_code, cell config_params_dict) = load_data();
+    (slice admin_address, slice treasury_address, cell storage_contract_code, cell config_params_dict, cell storage_provider_white_list_dict) = load_data();
     return treasury_address;
 }
 
-int get_param_value(int param) method_id {
-    int value = get_config_param(param, -1);
+int get_param_value(int param, int default_value) method_id {
+    int value = get_config_param(param, default_value);
     return value;
 }
 
@@ -191,13 +228,32 @@ slice get_storage_contract_address(
     cell storage_contract_code, slice owner_address,
     int torrent_hash, int file_size, int merkle_hash, int chunk_size, int initial_storage_fee,
     int storage_period_in_sec, int max_storage_proof_span_in_sec,
-    slice treasury_address, int treasury_fee_rate
+    slice treasury_address, int treasury_fee_rate, int max_storage_providers_per_order, cell storage_provider_white_list_dict
 ) method_id {
+    var ds = storage_provider_white_list_dict.begin_parse();
     cell state_init = build_storage_contract_stateinit(
         storage_contract_code, torrent_hash, owner_address, merkle_hash, file_size, chunk_size,
         initial_storage_fee, storage_period_in_sec, max_storage_proof_span_in_sec,
-        treasury_address, treasury_fee_rate
+        treasury_address, treasury_fee_rate, max_storage_providers_per_order, ds~load_dict()
     );
     slice storage_contract_address = calculate_storage_contract_address(state_init);
     return storage_contract_address;
+}
+
+cell get_storage_provider_white_list_dict() method_id {
+    (slice admin_address, slice treasury_address, cell storage_contract_code, cell config_params_dict, cell storage_provider_white_list_dict) = load_data();
+    return begin_cell().store_dict(storage_provider_white_list_dict).end_cell();
+}
+
+int is_storage_provider_white_listed(slice storage_provider_address) method_id {
+    (int wc, int storage_provider_addr) = parse_std_addr(storage_provider_address);
+
+    (slice admin_address, slice treasury_address, cell storage_contract_code, cell config_params_dict, cell storage_provider_white_list_dict) = load_data();
+    var (val, found?) = storage_provider_white_list_dict.udict_get_ref?(256, storage_provider_addr);
+    if (~ found?) {
+        return 0;
+    }
+    var ds = val.begin_parse();
+    var value = ds~load_uint(1);
+    return value;
 }

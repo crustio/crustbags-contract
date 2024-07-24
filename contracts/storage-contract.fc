@@ -30,17 +30,17 @@ const int SCALE = 1000000000 * 1000000000; ;;10^18
     );
 }
 
-(int, slice, int, int, int, int, int, slice, int) load_order_info() inline {
+(int, slice, int, int, int, int, int, slice, int, int, cell) load_order_info() inline {
     var ds = get_data().begin_parse();
     var (order_info, residue) = (ds~load_ref(), ds);
     
     ds = order_info.begin_parse();
     var (
         torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes, chunk_size, storage_period_in_sec, max_storage_proof_span_in_sec,
-        treasury_info
+        treasury_info, max_storage_providers_per_order, storage_provider_white_list_dict
     ) = (
         ds~load_uint(256), ds~load_msg_addr(), ds~load_uint(256), ds~load_uint(64),ds~load_uint(32), ds~load_uint(64), ds~load_uint(64),
-        ds~load_ref()
+        ds~load_ref(), ds~load_uint(16), ds~load_dict()
     );
     ds = treasury_info.begin_parse();
     var (
@@ -50,8 +50,25 @@ const int SCALE = 1000000000 * 1000000000; ;;10^18
     );
     return (
         torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes, chunk_size, storage_period_in_sec, max_storage_proof_span_in_sec,
-        treasury_address, treasury_fee_rate
+        treasury_address, treasury_fee_rate, max_storage_providers_per_order, storage_provider_white_list_dict
     );
+}
+
+int is_storage_provider_white_listed(slice storage_provider_address) inline {
+    (int wc, int storage_provider_addr) = parse_std_addr(storage_provider_address);
+
+    var (
+        torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes, chunk_size, storage_period_in_sec, max_storage_proof_span_in_sec,
+        treasury_address, treasury_fee_rate, max_storage_providers_per_order, storage_provider_white_list_dict
+    ) = load_order_info();
+
+    var (val, found?) = storage_provider_white_list_dict.udict_get_ref?(256, storage_provider_addr);
+    if (~ found?) {
+        return 0;
+    }
+    var ds = val.begin_parse();
+    var value = ds~load_uint(1);
+    return value;
 }
 
 (int, int, int, int, int, int, int, int) load_rewards_params() inline {
@@ -494,17 +511,22 @@ int per_sec_total_rewards_pending_settle_for_provider(slice provider_address) in
     if (success?) {
         throw(error::storage_provider_already_registered);
     }
-    do_settle_rewards(provider_address, 1, 0);
 
-    var first_worker = storage_providers_dict.dict_empty?();
+    var (
+        torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes, chunk_size, storage_period_in_sec, max_storage_proof_span_in_sec,
+        treasury_address, treasury_fee_rate, max_storage_providers_per_order, storage_provider_white_list_dict
+    ) = load_order_info();
     var (
         started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
         per_sec_per_provider_total_rewards_settled_scaled, period_finish, last_settle_time
     ) = load_rewards_params();
-    var (
-        torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes, chunk_size, storage_period_in_sec, max_storage_proof_span_in_sec,
-        treasury_address, treasury_fee_rate
-    ) = load_order_info();
+    if (total_storage_providers >= max_storage_providers_per_order) {
+        throw(error::max_storage_providers_per_order_exceeded);
+    }
+
+    do_settle_rewards(provider_address, 1, 0);
+
+    var first_worker = storage_providers_dict.dict_empty?();
     if ((~ started) & first_worker) {
         ~strdump("register_as_provider(), first_worker");
         started = 1;
@@ -589,7 +611,7 @@ int per_sec_total_rewards_pending_settle_for_provider(slice provider_address) in
 
         var (
             torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes, _, storage_period_in_sec, max_storage_proof_span_in_sec,
-            treasury_address, treasury_fee_rate
+            treasury_address, treasury_fee_rate, max_storage_providers_per_order, storage_provider_white_list_dict
         ) = load_order_info();
         if (treasury_fee_rate > 0) {
             treasury_fees = total_rewards * treasury_fee_rate / 10000;
@@ -623,7 +645,7 @@ int per_sec_total_rewards_pending_settle_for_provider(slice provider_address) in
 () recycle(slice caller_address) impure {
     var (
         torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes, _, storage_period_in_sec, max_storage_proof_span_in_sec,
-        treasury_address, treasury_fee_rate
+        treasury_address, treasury_fee_rate, max_storage_providers_per_order, storage_provider_white_list_dict
     ) = load_order_info();
     throw_unless(error::unauthorized, equal_slice_bits(caller_address, owner_address));
 
@@ -687,7 +709,7 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, int chunk_siz
     return 1;
 }
 
-() on_submit_storage_proof(slice provider_address, int valid) impure {
+() on_submit_storage_proof(slice provider_address, int valid, int is_white_listed) impure {
     (int wc, int provider_addr) = parse_std_addr(provider_address);
 
     var storage_providers_dict = load_storage_providers_dict();
@@ -709,9 +731,17 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, int chunk_siz
 
     var (
         torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes, _, storage_period_in_sec, max_storage_proof_span_in_sec,
-        treasury_address, treasury_fee_rate
+        treasury_address, treasury_fee_rate, max_storage_providers_per_order, storage_provider_white_list_dict
     ) = load_order_info();
-    var in_report_window = (now() - last_work_report_time) <= max_storage_proof_span_in_sec;
+
+    var in_report_window = 0;
+    if (is_white_listed) {
+        in_report_window = 1;
+    }
+    else {
+        in_report_window = (now() - last_work_report_time) <= max_storage_proof_span_in_sec;
+    }
+
     if (~ in_report_window) {
         var (
             started, total_storage_providers, total_rewards, total_rewards_per_sec_scaled, undistributed_rewards_scaled,
@@ -767,8 +797,6 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, int chunk_siz
     }
 
     if (op == op::submit_storage_proof) {
-        ;; cell file_dict_proof = in_msg_body~load_ref();
-
         var storage_providers_dict = load_storage_providers_dict();
         var (_, success?) = storage_providers_dict.udict_get?(256, sender_addr);
         if (~ success?) {
@@ -785,9 +813,17 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, int chunk_siz
 
         var (
             torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes, chunk_size, storage_period_in_sec, max_storage_proof_span_in_sec,
-            treasury_address, treasury_fee_rate
+            treasury_address, treasury_fee_rate, max_storage_providers_per_order, storage_provider_white_list_dict
         ) = load_order_info();
-        var valid = check_proof(file_merkle_hash, next_proof, file_size_in_bytes, chunk_size, in_msg_body);
+
+        var is_white_listed = is_storage_provider_white_listed(sender_address);
+        var valid = 0;
+        if (is_white_listed) {
+            valid = 1;
+        }
+        else {
+            valid = check_proof(file_merkle_hash, next_proof, file_size_in_bytes, chunk_size, in_msg_body);
+        }
 
         var storage_providers_last_proof_valid_dict = load_storage_provider_last_proof_valid();
         storage_providers_last_proof_valid_dict~udict_set_ref(256, sender_addr, begin_cell().store_uint(valid, 1).end_cell());
@@ -797,7 +833,7 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, int chunk_siz
         storage_provider_next_proofs_dict~udict_set_ref(256, sender_addr, begin_cell().store_uint(next_proof, 64).end_cell());
         save_storage_provider_next_proofs(storage_provider_next_proofs_dict);
 
-        on_submit_storage_proof(sender_address, valid);
+        on_submit_storage_proof(sender_address, valid, is_white_listed);
         return ();
     }
 
@@ -809,8 +845,17 @@ int check_proof(int merkle_hash, int byte_to_proof, int file_size, int chunk_siz
     throw(error::unknown_op);
 }
 
-(int, slice, int, int, int, int, int, slice, int) get_order_info() method_id {
-    return load_order_info();
+(int, slice, int, int, int, int, int, slice, int, int, cell) get_order_info() method_id {
+    var (
+        torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes, chunk_size, storage_period_in_sec, max_storage_proof_span_in_sec,
+        treasury_address, treasury_fee_rate, max_storage_providers_per_order, storage_provider_white_list_dict
+    ) = load_order_info();
+
+    return (
+        torrent_hash, owner_address, file_merkle_hash, file_size_in_bytes, chunk_size, storage_period_in_sec, max_storage_proof_span_in_sec,
+        treasury_address, treasury_fee_rate, max_storage_providers_per_order,
+        begin_cell().store_dict(storage_provider_white_list_dict).end_cell()
+    );
 }
 
 int started() method_id {

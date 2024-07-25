@@ -1,4 +1,4 @@
-import { Cell, Dictionary, toNano } from '@ton/core';
+import { Address, beginCell, Cell, Dictionary, toNano } from '@ton/core';
 import { TonBags } from '../wrappers/TonBags';
 import { compile, NetworkProvider } from '@ton/blueprint';
 
@@ -6,6 +6,7 @@ export async function run(provider: NetworkProvider) {
     const storageContractCode = await compile('StorageContract');
     const tonBagCode = await compile('TonBags');
     const configParamsDict: Dictionary<bigint, Cell> = Dictionary.empty();
+    const storageProviderWhitelistDict: Dictionary<Address, Cell> = Dictionary.empty();
     const senderAddress = provider.sender().address!;
     const tonBags = provider.open(
         TonBags.createFromConfig(
@@ -13,7 +14,8 @@ export async function run(provider: NetworkProvider) {
                 adminAddress: senderAddress,
                 treasuryAddress: senderAddress,
                 storageContractCode,
-                configParamsDict
+                configParamsDict,
+                storageProviderWhitelistDict,
             },
             tonBagCode
         )

@@ -2,10 +2,10 @@ import { NetworkProvider } from "@ton/blueprint";
 import { Address, toNano } from "@ton/core";
 import { TonBags } from "../wrappers/TonBags";
 import { getMerkleRoot } from "../tests/merkleProofUtils";
-import { default_storage_period } from "../tests/utils";
+import { default_storage_period } from "../wrappers/constants";
 
 export async function run(provider: NetworkProvider) {
-    const tonBags = provider.api().open(TonBags.createFromAddress(Address.parse("kQD8ntXDohGn8GPVfxX5BF6zfgl7A_fks-8QoVcmKx5TE5M-")));
+    const tonBags = provider.api().open(TonBags.createFromAddress(Address.parse("EQBOOMNqG0rvNm6vFGfR4qZl48BTDw_gYefVI4DQ70t9GoPC")));
     // TODO: send order to TonBags
     const sender = provider.sender();
     const dataArray = [

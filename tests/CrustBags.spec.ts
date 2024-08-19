@@ -2,9 +2,9 @@ import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
 import { Address, Cell, Dictionary, beginCell, toNano, fromNano } from '@ton/core';
-import { TonBags } from '../wrappers/TonBags';
+import { CrustBags } from '../wrappers/CrustBags';
 import { StorageContract } from '../wrappers/StorageContract';
-import { TonBagsV2 } from '../wrappers/tests/TonBagsV2';
+import { CrustBagsV2 } from '../wrappers/tests/CrustBagsV2';
 import {
     error_unauthorized, error_not_enough_storage_fee, error_duplicated_torrent_hash,
     error_file_too_small, error_file_too_large, error_storage_order_unexpired, error_unregistered_storage_provider,
@@ -31,8 +31,8 @@ const readAsBlob = async (file: string) => {
     });
 };
 
-describe('TonBags', () => {
-    let tonBagsCode: Cell;
+describe('CrustBags', () => {
+    let crustBagsCode: Cell;
     let storageContractCode: Cell;
 
     let blockchain: Blockchain;
@@ -42,12 +42,12 @@ describe('TonBags', () => {
     let Caro: SandboxContract<TreasuryContract>;
     let Dave: SandboxContract<TreasuryContract>;
     let Eva: SandboxContract<TreasuryContract>;
-    let tonBags: SandboxContract<TonBags>;
+    let crustBags: SandboxContract<CrustBags>;
     let configParamsDict: Dictionary<bigint, Cell>;
     let storageProviderWhitelistDict: Dictionary<Address, Cell>;
 
     beforeEach(async () => {
-        tonBagsCode = await compile('TonBags');
+        crustBagsCode = await compile('CrustBags');
         storageContractCode = await compile('StorageContract');
 
         blockchain = await Blockchain.create();
@@ -60,8 +60,8 @@ describe('TonBags', () => {
         configParamsDict = Dictionary.empty();
         storageProviderWhitelistDict = Dictionary.empty();
 
-        tonBags = blockchain.openContract(
-            TonBags.createFromConfig(
+        crustBags = blockchain.openContract(
+            CrustBags.createFromConfig(
                 {
                     adminAddress: Alice.address,
                     treasuryAddress: Treasury.address,
@@ -69,41 +69,41 @@ describe('TonBags', () => {
                     configParamsDict,
                     storageProviderWhitelistDict
                 },
-                tonBagsCode
+                crustBagsCode
             )
         );
 
-        const deployResult = await tonBags.sendDeploy(Alice.getSender(), toNano('0.1'));
+        const deployResult = await crustBags.sendDeploy(Alice.getSender(), toNano('0.1'));
         expect(deployResult.transactions).toHaveTransaction({
             from: Alice.address,
-            to: tonBags.address,
+            to: crustBags.address,
             deploy: true,
             success: true
         });
-        let trans = await tonBags.sendSetConfigParam(Alice.getSender(), BigInt(config_min_storage_period_in_sec), 60n * 60n * 24n * 7n);
+        let trans = await crustBags.sendSetConfigParam(Alice.getSender(), BigInt(config_min_storage_period_in_sec), 60n * 60n * 24n * 7n);
         expect(trans.transactions).toHaveTransaction({
             from: Alice.address,
-            to: tonBags.address,
+            to: crustBags.address,
             op: op_set_config_param,
             success: true,
         });
-        trans = await tonBags.sendSetConfigParam(Alice.getSender(), BigInt(config_max_storage_proof_span_in_sec), BigInt(ONE_HOUR_IN_SECS));
+        trans = await crustBags.sendSetConfigParam(Alice.getSender(), BigInt(config_max_storage_proof_span_in_sec), BigInt(ONE_HOUR_IN_SECS));
         expect(trans.transactions).toHaveTransaction({
             from: Alice.address,
-            to: tonBags.address,
+            to: crustBags.address,
             op: op_set_config_param,
             success: true,
         });
-        trans = await tonBags.sendSetConfigParam(Alice.getSender(), BigInt(config_treasury_fee_rate), 100n);
+        trans = await crustBags.sendSetConfigParam(Alice.getSender(), BigInt(config_treasury_fee_rate), 100n);
         expect(trans.transactions).toHaveTransaction({
             from: Alice.address,
-            to: tonBags.address,
+            to: crustBags.address,
             op: op_set_config_param,
             success: true,
         });
 
         // https://github.com/ton-org/sandbox?tab=readme-ov-file#viewing-logs
-        await blockchain.setVerbosityForAddress(tonBags.address, {
+        await blockchain.setVerbosityForAddress(crustBags.address, {
             print: true,
             blockchainLogs: false,
             vmLogs: 'none',  // 'none' | 'vm_logs' | 'vm_logs_full'
@@ -113,47 +113,47 @@ describe('TonBags', () => {
 
     it('should deploy', async () => {
         // the check is done inside beforeEach
-        // blockchain and tonBags are ready to use
+        // blockchain and crustBags are ready to use
     });
 
-    it('tonbags should be upgradable', async () => {
-        const tonBagsCodeV2 = await compile('tests/TonBagsV2');
+    it('crustbags should be upgradable', async () => {
+        const crustBagsCodeV2 = await compile('tests/CrustBagsV2');
         const storageContractCodeV2 = await compile('tests/StorageContractV2');
 
-        expect(await tonBags.getAdminAddress()).toEqualAddress(Alice.address);
+        expect(await crustBags.getAdminAddress()).toEqualAddress(Alice.address);
 
-        let trans = await tonBags.sendUpdateStorageContractCode(Bob.getSender(), storageContractCodeV2);
+        let trans = await crustBags.sendUpdateStorageContractCode(Bob.getSender(), storageContractCodeV2);
         expect(trans.transactions).toHaveTransaction({
             from: Bob.address,
-            to: tonBags.address,
+            to: crustBags.address,
             aborted: true,
             exitCode: error_unauthorized
         });
-        trans = await tonBags.sendUpdateStorageContractCode(Alice.getSender(), storageContractCodeV2);
+        trans = await crustBags.sendUpdateStorageContractCode(Alice.getSender(), storageContractCodeV2);
         expect(trans.transactions).toHaveTransaction({
             from: Alice.address,
-            to: tonBags.address,
+            to: crustBags.address,
             op: op_update_storage_contract_code,
             success: true,
         });
 
-        trans = await tonBags.sendUpgrade(Bob.getSender(), tonBagsCodeV2);
+        trans = await crustBags.sendUpgrade(Bob.getSender(), crustBagsCodeV2);
         expect(trans.transactions).toHaveTransaction({
             from: Bob.address,
-            to: tonBags.address,
+            to: crustBags.address,
             aborted: true,
             exitCode: error_unauthorized
         });
-        trans = await tonBags.sendUpgrade(Alice.getSender(), tonBagsCodeV2);
+        trans = await crustBags.sendUpgrade(Alice.getSender(), crustBagsCodeV2);
         expect(trans.transactions).toHaveTransaction({
             from: Alice.address,
-            to: tonBags.address,
+            to: crustBags.address,
             op: op_upgrade,
             success: true,
         });
 
-        const tonBagsV2 = blockchain.openContract(
-            TonBagsV2.createFromConfig(
+        const crustBagsV2 = blockchain.openContract(
+            CrustBagsV2.createFromConfig(
                 {
                     adminAddress: Alice.address,
                     treasuryAddress: Treasury.address,
@@ -161,72 +161,72 @@ describe('TonBags', () => {
                     configParamsDict,
                     storageProviderWhitelistDict
                 },
-                tonBagsCode
+                crustBagsCode
             )
         );
-        expect(await tonBagsV2.getSomeMethodV2()).toEqual("Hello, TonBags V2!");
+        expect(await crustBagsV2.getSomeMethodV2()).toEqual("Hello, CrustBags V2!");
     });
 
     it('minter admin can change admin', async () => {
-        expect(await tonBags.getAdminAddress()).toEqualAddress(Alice.address);
+        expect(await crustBags.getAdminAddress()).toEqualAddress(Alice.address);
 
-        let changeAdmin = await tonBags.sendUpdateAdmin(Alice.getSender(), Bob.address);
-        expect(await tonBags.getAdminAddress()).toEqualAddress(Bob.address);
+        let changeAdmin = await crustBags.sendUpdateAdmin(Alice.getSender(), Bob.address);
+        expect(await crustBags.getAdminAddress()).toEqualAddress(Bob.address);
 
-        changeAdmin = await tonBags.sendUpdateAdmin(Bob.getSender(), Alice.address);
-        expect(await tonBags.getAdminAddress()).toEqualAddress(Alice.address);
+        changeAdmin = await crustBags.sendUpdateAdmin(Bob.getSender(), Alice.address);
+        expect(await crustBags.getAdminAddress()).toEqualAddress(Alice.address);
     });
 
     it('not a minter admin can not change admin', async () => {
-        let changeAdmin = await tonBags.sendUpdateAdmin(Bob.getSender(), Bob.address);
-        expect(await tonBags.getAdminAddress()).toEqualAddress(Alice.address);
+        let changeAdmin = await crustBags.sendUpdateAdmin(Bob.getSender(), Bob.address);
+        expect(await crustBags.getAdminAddress()).toEqualAddress(Alice.address);
         expect(changeAdmin.transactions).toHaveTransaction({
             from: Bob.address,
-            to: tonBags.address,
+            to: crustBags.address,
             aborted: true,
             exitCode: error_unauthorized
         });
     });
 
     it('admin can update treasury and config parameters', async () => {
-        expect(await tonBags.getAdminAddress()).toEqualAddress(Alice.address);
-        expect(await tonBags.getTreasuryAddress()).toEqualAddress(Treasury.address);
+        expect(await crustBags.getAdminAddress()).toEqualAddress(Alice.address);
+        expect(await crustBags.getTreasuryAddress()).toEqualAddress(Treasury.address);
 
         let newTreasury = await blockchain.treasury('New Treasury');
 
-        let trans = await tonBags.sendUpdateTreasury(Bob.getSender(), newTreasury.address);
+        let trans = await crustBags.sendUpdateTreasury(Bob.getSender(), newTreasury.address);
         expect(trans.transactions).toHaveTransaction({
             from: Bob.address,
-            to: tonBags.address,
+            to: crustBags.address,
             aborted: true,
             exitCode: error_unauthorized
         });
-        expect(await tonBags.getTreasuryAddress()).toEqualAddress(Treasury.address);
+        expect(await crustBags.getTreasuryAddress()).toEqualAddress(Treasury.address);
 
-        trans = await tonBags.sendUpdateTreasury(Alice.getSender(), newTreasury.address);
+        trans = await crustBags.sendUpdateTreasury(Alice.getSender(), newTreasury.address);
         expect(trans.transactions).toHaveTransaction({
             from: Alice.address,
-            to: tonBags.address,
+            to: crustBags.address,
             op: op_update_treasury,
             success: true
         });
-        expect(await tonBags.getTreasuryAddress()).toEqualAddress(newTreasury.address);
+        expect(await crustBags.getTreasuryAddress()).toEqualAddress(newTreasury.address);
 
-        trans = await tonBags.sendSetConfigParam(Bob.getSender(), BigInt(config_min_storage_period_in_sec), 60n * 60n * 24n * 1n);
+        trans = await crustBags.sendSetConfigParam(Bob.getSender(), BigInt(config_min_storage_period_in_sec), 60n * 60n * 24n * 1n);
         expect(trans.transactions).toHaveTransaction({
             from: Bob.address,
-            to: tonBags.address,
+            to: crustBags.address,
             aborted: true,
             exitCode: error_unauthorized
         });
-        trans = await tonBags.sendSetConfigParam(Alice.getSender(), BigInt(config_min_storage_period_in_sec), 60n * 60n * 24n * 1n);
+        trans = await crustBags.sendSetConfigParam(Alice.getSender(), BigInt(config_min_storage_period_in_sec), 60n * 60n * 24n * 1n);
         expect(trans.transactions).toHaveTransaction({
             from: Alice.address,
-            to: tonBags.address,
+            to: crustBags.address,
             op: op_set_config_param,
             success: true,
         });
-        expect(await tonBags.getConfigParam(BigInt(config_min_storage_period_in_sec), 0n)).toEqual(60n * 60n * 24n * 1n);
+        expect(await crustBags.getConfigParam(BigInt(config_min_storage_period_in_sec), 0n)).toEqual(60n * 60n * 24n * 1n);
     });
 
     it('anyone could place order to create a storage contract', async () => {
@@ -238,53 +238,53 @@ describe('TonBags', () => {
         const torrentHash = BigInt('0x476848C3350EA64ACCC09218917132998267F2ABC283097082FD41D511CAF11B');
         // const fileSize = 1024n * 1024n * 10n;  // 10MB
 
-        let trans = await tonBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'), default_storage_period);
+        let trans = await crustBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'), default_storage_period);
         expect(trans.transactions).toHaveTransaction({
             from: Bob.address,
-            to: tonBags.address,
+            to: crustBags.address,
             success: true
         });
 
-        // trans = await tonBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'));
+        // trans = await crustBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'));
         // expect(trans.transactions).toHaveTransaction({
         //     from: Caro.address,
-        //     to: tonBags.address,
+        //     to: crustBags.address,
         //     aborted: true,
         //     exitCode: error_duplicated_torrent_hash,
         //     success: false
         // });
 
         const torrentHash2 = BigInt('0x476848C3350EA64ACCC09218917132998267F2ABC283097082FD41D511CAF11C');
-        trans = await tonBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash2, fileSize, merkleRoot, toNano('1'), default_storage_period);
+        trans = await crustBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash2, fileSize, merkleRoot, toNano('1'), default_storage_period);
         expect(trans.transactions).toHaveTransaction({
             from: Caro.address,
-            to: tonBags.address,
+            to: crustBags.address,
             success: true
         });
 
         const torrentHash3 = BigInt('0x476848C3350EA64ACCC09218917132998267F2ABC283097082FD41D511CAF11D');
-        trans = await tonBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash3, 0n, merkleRoot, toNano('1'), default_storage_period);
+        trans = await crustBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash3, 0n, merkleRoot, toNano('1'), default_storage_period);
         expect(trans.transactions).toHaveTransaction({
             from: Caro.address,
-            to: tonBags.address,
+            to: crustBags.address,
             aborted: true,
             exitCode: error_file_too_small,
             success: false
         });
 
-        trans = await tonBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash3, 1024n * 1024n * 1024n * 100n, merkleRoot, toNano('1'), default_storage_period);
+        trans = await crustBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash3, 1024n * 1024n * 1024n * 100n, merkleRoot, toNano('1'), default_storage_period);
         expect(trans.transactions).toHaveTransaction({
             from: Caro.address,
-            to: tonBags.address,
+            to: crustBags.address,
             aborted: true,
             exitCode: error_file_too_large,
             success: false
         });
 
-        trans = await tonBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash3, 1024n * 1024n * 100n, merkleRoot, toNano('0.0001'), default_storage_period);
+        trans = await crustBags.sendPlaceStorageOrder(Caro.getSender(), torrentHash3, 1024n * 1024n * 100n, merkleRoot, toNano('0.0001'), default_storage_period);
         expect(trans.transactions).toHaveTransaction({
             from: Caro.address,
-            to: tonBags.address,
+            to: crustBags.address,
             aborted: true,
             exitCode: error_not_enough_storage_fee,
             success: false
@@ -299,30 +299,30 @@ describe('TonBags', () => {
         const fileSize = 1024n * 1024n * 10n;  // 10MB
 
         // Storage periods with 1/2 day does not work (< minimal 7 days)
-        let trans = await tonBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'), 60n * 60n * 24n / 2n);
+        let trans = await crustBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'), 60n * 60n * 24n / 2n);
         expect(trans.transactions).toHaveTransaction({
             from: Bob.address,
-            to: tonBags.address,
+            to: crustBags.address,
             aborted: true,
             exitCode: error_too_short_storage_period,
             success: false
         });
 
         // Storage periods with 30 days works
-        let maxStorageProofSpan = await tonBags.getConfigParam(BigInt(config_max_storage_proof_span_in_sec), 0n);
-        trans = await tonBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'), 60n * 60n * 24n * 30n);
+        let maxStorageProofSpan = await crustBags.getConfigParam(BigInt(config_max_storage_proof_span_in_sec), 0n);
+        trans = await crustBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'), 60n * 60n * 24n * 30n);
         expect(trans.transactions).toHaveTransaction({
             from: Bob.address,
-            to: tonBags.address,
+            to: crustBags.address,
             op: op_place_storage_order,
             success: true
         });
-        console.log(`Max storage providers per order: ${await tonBags.getConfigParam(BigInt(config_max_storage_providers_per_order), 0n)}`);
-        let calStorageContractAddress = await tonBags.getStorageContractAddress(
+        console.log(`Max storage providers per order: ${await crustBags.getConfigParam(BigInt(config_max_storage_providers_per_order), 0n)}`);
+        let calStorageContractAddress = await crustBags.getStorageContractAddress(
             storageContractCode, Bob.address, torrentHash, fileSize, merkleRoot, toNano('1'), 60n * 60n * 24n * 30n, maxStorageProofSpan,
-            Treasury.address, await tonBags.getConfigParam(BigInt(config_treasury_fee_rate), 0n),
-            await tonBags.getConfigParam(BigInt(config_max_storage_providers_per_order), default_max_storage_providers_per_order),
-            await tonBags.getStorageProviderWhitelistDict()
+            Treasury.address, await crustBags.getConfigParam(BigInt(config_treasury_fee_rate), 0n),
+            await crustBags.getConfigParam(BigInt(config_max_storage_providers_per_order), default_max_storage_providers_per_order),
+            await crustBags.getStorageProviderWhitelistDict()
         );
         let storageContract = blockchain.openContract(
             StorageContract.createFromAddress(
@@ -332,10 +332,10 @@ describe('TonBags', () => {
         console.log(`Storage contract address: ${storageContract.address}, balance: ${fromNano(await storageContract.getBalance())}`);
 
         // Placing storage orders with same parameters just double the balance
-        trans = await tonBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'), 60n * 60n * 24n * 30n);
+        trans = await crustBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'), 60n * 60n * 24n * 30n);
         expect(trans.transactions).toHaveTransaction({
             from: Bob.address,
-            to: tonBags.address,
+            to: crustBags.address,
             op: op_place_storage_order,
             success: true
         });
@@ -353,41 +353,41 @@ describe('TonBags', () => {
 
         // Update parameters
         let newMaxStorageProofSpan = 60n * 60n / 2n;
-        trans = await tonBags.sendSetConfigParam(Alice.getSender(), BigInt(config_max_storage_proof_span_in_sec), newMaxStorageProofSpan);
-        expect(await tonBags.getConfigParam(BigInt(config_max_storage_proof_span_in_sec), 0n)).toEqual(newMaxStorageProofSpan);
+        trans = await crustBags.sendSetConfigParam(Alice.getSender(), BigInt(config_max_storage_proof_span_in_sec), newMaxStorageProofSpan);
+        expect(await crustBags.getConfigParam(BigInt(config_max_storage_proof_span_in_sec), 0n)).toEqual(newMaxStorageProofSpan);
 
         // Add Alice to whitelist
-        trans = await tonBags.sendAddStorageProviderToWhitelist(Bob.getSender(), Alice.address);
+        trans = await crustBags.sendAddStorageProviderToWhitelist(Bob.getSender(), Alice.address);
         expect(trans.transactions).toHaveTransaction({
             from: Bob.address,
-            to: tonBags.address,
+            to: crustBags.address,
             aborted: true,
             exitCode: error_unauthorized
         });
-        trans = await tonBags.sendAddStorageProviderToWhitelist(Alice.getSender(), Alice.address);
+        trans = await crustBags.sendAddStorageProviderToWhitelist(Alice.getSender(), Alice.address);
         expect(trans.transactions).toHaveTransaction({
             from: Alice.address,
-            to: tonBags.address,
+            to: crustBags.address,
             op: op_add_storage_provider_to_white_list,
             success: true
         });
         expect(await storageContract.getIsStorageProviderWhitelisted(Alice.address)).toBeFalsy();
-        // console.log(`Alice white listed: ${await tonBags.getIsStorageProviderWhitelisted(Alice.address)}`);
-        expect(await tonBags.getIsStorageProviderWhitelisted(Alice.address)).toBeTruthy();
+        // console.log(`Alice white listed: ${await crustBags.getIsStorageProviderWhitelisted(Alice.address)}`);
+        expect(await crustBags.getIsStorageProviderWhitelisted(Alice.address)).toBeTruthy();
 
         // Deploy a new storage contract with updated parameters
-        trans = await tonBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'), 60n * 60n * 24n * 30n);
+        trans = await crustBags.sendPlaceStorageOrder(Bob.getSender(), torrentHash, fileSize, merkleRoot, toNano('1'), 60n * 60n * 24n * 30n);
         expect(trans.transactions).toHaveTransaction({
             from: Bob.address,
-            to: tonBags.address,
+            to: crustBags.address,
             op: op_place_storage_order,
             success: true
         });
-        let calStorageContractAddress2 = await tonBags.getStorageContractAddress(
+        let calStorageContractAddress2 = await crustBags.getStorageContractAddress(
             storageContractCode, Bob.address, torrentHash, fileSize, merkleRoot, toNano('1'), 60n * 60n * 24n * 30n, newMaxStorageProofSpan,
-            Treasury.address, await tonBags.getConfigParam(BigInt(config_treasury_fee_rate), 0n),
-            await tonBags.getConfigParam(BigInt(config_max_storage_providers_per_order), default_max_storage_providers_per_order),
-            await tonBags.getStorageProviderWhitelistDict()
+            Treasury.address, await crustBags.getConfigParam(BigInt(config_treasury_fee_rate), 0n),
+            await crustBags.getConfigParam(BigInt(config_max_storage_providers_per_order), default_max_storage_providers_per_order),
+            await crustBags.getStorageProviderWhitelistDict()
         );
         expect(calStorageContractAddress2).not.toEqual(calStorageContractAddress);
         let storageContract2 = blockchain.openContract(
@@ -405,14 +405,14 @@ describe('TonBags', () => {
 
     it('storage contract works', async () => {
         // Set default_max_storage_providers_per_order to 3
-        let trans = await tonBags.sendSetConfigParam(Alice.getSender(), BigInt(config_max_storage_providers_per_order), 3n);
+        let trans = await crustBags.sendSetConfigParam(Alice.getSender(), BigInt(config_max_storage_providers_per_order), 3n);
 
         // Add Caro & Eva to whitelist
-        trans = await tonBags.sendAddStorageProviderToWhitelist(Alice.getSender(), Caro.address);
-        trans = await tonBags.sendAddStorageProviderToWhitelist(Alice.getSender(), Eva.address);
+        trans = await crustBags.sendAddStorageProviderToWhitelist(Alice.getSender(), Caro.address);
+        trans = await crustBags.sendAddStorageProviderToWhitelist(Alice.getSender(), Eva.address);
 
-        console.log(fromNano(await tonBags.getBalance()));
-        const tonBagsBalanceBeforeDeployStorageContract = await tonBags.getBalance();
+        console.log(fromNano(await crustBags.getBalance()));
+        const crustBagsBalanceBeforeDeployStorageContract = await crustBags.getBalance();
 
         const file = await readAsBlob(path.join(__dirname,'/.files/test.zip'));
         const fileSize = BigInt(file.size);
@@ -429,21 +429,21 @@ describe('TonBags', () => {
         // 1 hour rewards: 0.24 / 24 = 0.01
         const totalStorageFee = toNano('86.4');
         const newStoragePeriodInSec = default_storage_period * 2n;
-        trans = await tonBags.sendPlaceStorageOrder(Dave.getSender(), torrentHash, fileSize, merkleRoot, totalStorageFee, newStoragePeriodInSec);
+        trans = await crustBags.sendPlaceStorageOrder(Dave.getSender(), torrentHash, fileSize, merkleRoot, totalStorageFee, newStoragePeriodInSec);
         expect(trans.transactions).toHaveTransaction({
             from: Dave.address,
-            to: tonBags.address,
+            to: crustBags.address,
             success: true
         });
-        // let maxStorageProofSpan = await tonBags.getConfigParam(BigInt(config_max_storage_proof_span_in_sec));
+        // let maxStorageProofSpan = await crustBags.getConfigParam(BigInt(config_max_storage_proof_span_in_sec));
         // console.log('maxStorageProofSpan: ', maxStorageProofSpan);
-        const storageFeeRate = await tonBags.getConfigParam(BigInt(config_treasury_fee_rate), 0n);
-        const calStorageContractAddress = await tonBags.getStorageContractAddress(
+        const storageFeeRate = await crustBags.getConfigParam(BigInt(config_treasury_fee_rate), 0n);
+        const calStorageContractAddress = await crustBags.getStorageContractAddress(
             storageContractCode, Dave.address, torrentHash, fileSize, merkleRoot, totalStorageFee, newStoragePeriodInSec,
-            await tonBags.getConfigParam(BigInt(config_max_storage_proof_span_in_sec), default_max_storage_proof_span),
+            await crustBags.getConfigParam(BigInt(config_max_storage_proof_span_in_sec), default_max_storage_proof_span),
             Treasury.address, storageFeeRate,
-            await tonBags.getConfigParam(BigInt(config_max_storage_providers_per_order), default_max_storage_providers_per_order),
-            await tonBags.getStorageProviderWhitelistDict()
+            await crustBags.getConfigParam(BigInt(config_max_storage_providers_per_order), default_max_storage_providers_per_order),
+            await crustBags.getStorageProviderWhitelistDict()
         );
 
         const storageContract = blockchain.openContract(
@@ -465,12 +465,12 @@ describe('TonBags', () => {
         // expect(maxStorageProofSpanInSec).toEqual(default_max_storage_proof_span);
         expect(await storageContract.getEarned(Alice.address)).toEqual(0n);
 
-        console.log(fromNano(await tonBags.getBalance()));
+        console.log(fromNano(await crustBags.getBalance()));
         console.log(fromNano(await storageContract.getBalance()));
 
-        // TonBags balance should remain unchanged
-        // expect(await tonBags.getBalance()).toEqual(tonBagsBalanceBeforeDeployStorageContract);
-        expectBigNumberEquals(tonBagsBalanceBeforeDeployStorageContract, await tonBags.getBalance());
+        // CrustBags balance should remain unchanged
+        // expect(await crustBags.getBalance()).toEqual(crustBagsBalanceBeforeDeployStorageContract);
+        expectBigNumberEquals(crustBagsBalanceBeforeDeployStorageContract, await crustBags.getBalance());
 
         // Storage fees and remaining gas should go to new storage contract
         expect(await storageContract.getBalance()).toBeGreaterThan(totalStorageFee);

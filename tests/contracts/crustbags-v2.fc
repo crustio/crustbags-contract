@@ -4,5 +4,5 @@
 }
 
 slice some_method_v2() method_id {
-    return "Hello, TonBags V2!";
+    return "Hello, CrustBags V2!";
 }

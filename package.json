@@ -1,5 +1,5 @@
 {
-    "name": "tonbags-contract",
+    "name": "crustbags-contract",
     "version": "0.0.1",
     "scripts": {
         "start": "blueprint run",

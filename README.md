@@ -1,4 +1,4 @@
-# tonbags-contract
+# crustbags-contract
 
 ## Project structure
 
@@ -25,13 +25,13 @@ $ yarn blueprint test
 
 ```sh
 # https://github.com/ton-org/blueprint?tab=readme-ov-file#deploying-contracts
-$ yarn blueprint run deployTonBags --testnet --tonconnect
+$ yarn blueprint run deployCrustBags --testnet --tonconnect
 ```
 
 ### Run script
 
 ```sh
-$ yarn blueprint run placeOrderToTonBags --testnet --tonconnect
+$ yarn blueprint run placeOrderToCrustBags --testnet --tonconnect
 ```
 
 ### Add a new contract
@@ -44,8 +44,8 @@ $ yarn blueprint create ContractName
 
 ### Testnet
 
-https://testnet.tonviewer.com/kQD8ntXDohGn8GPVfxX5BF6zfgl7A_fks-8QoVcmKx5TE5M-
-https://testnet.tonscan.org/address/kQD8ntXDohGn8GPVfxX5BF6zfgl7A_fks-8QoVcmKx5TE5M-
+https://testnet.tonviewer.com/EQBOOMNqG0rvNm6vFGfR4qZl48BTDw_gYefVI4DQ70t9GoPC
+https://testnet.tonscan.org/address/EQBOOMNqG0rvNm6vFGfR4qZl48BTDw_gYefVI4DQ70t9GoPC
 
 > For ton address translation, check https://ton.org/address
 > For testnet info, check https://docs.ton.org/develop/smart-contracts/environment/testnet

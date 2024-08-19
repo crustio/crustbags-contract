@@ -1,15 +1,15 @@
 import { Address, beginCell, Cell, Dictionary, toNano } from '@ton/core';
-import { TonBags } from '../wrappers/TonBags';
+import { CrustBags } from '../wrappers/CrustBags';
 import { compile, NetworkProvider } from '@ton/blueprint';
 
 export async function run(provider: NetworkProvider) {
     const storageContractCode = await compile('StorageContract');
-    const tonBagCode = await compile('TonBags');
+    const crustBagsCode = await compile('CrustBags');
     const configParamsDict: Dictionary<bigint, Cell> = Dictionary.empty();
     const storageProviderWhitelistDict: Dictionary<Address, Cell> = Dictionary.empty();
     const senderAddress = provider.sender().address!;
-    const tonBags = provider.open(
-        TonBags.createFromConfig(
+    const crustBags = provider.open(
+        CrustBags.createFromConfig(
             {
                 adminAddress: senderAddress,
                 treasuryAddress: senderAddress,
@@ -17,13 +17,13 @@ export async function run(provider: NetworkProvider) {
                 configParamsDict,
                 storageProviderWhitelistDict,
             },
-            tonBagCode
+            crustBagsCode
         )
     );
 
-    await tonBags.sendDeploy(provider.sender(), toNano('0.05'));
+    await crustBags.sendDeploy(provider.sender(), toNano('0.05'));
 
-    await provider.waitForDeploy(tonBags.address);
+    await provider.waitForDeploy(crustBags.address);
 
-    console.log('address', tonBags.address.toString());
+    console.log('address', crustBags.address.toString());
 }
